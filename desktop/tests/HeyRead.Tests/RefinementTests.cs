@@ -64,6 +64,16 @@ public sealed class RefinementTests
         }
         finally { Directory.Delete(root, true); Directory.Delete(source, true); }
     }
+    [Theory]
+    [InlineData(0, false)] [InlineData(1, true)] [InlineData(2, false)] [InlineData(3, true)]
+    public async Task FollowStatusUsesVerifiedWebPosterWhenTreeOmitsRelationship(int value, bool expected)
+    {
+        var body = "{\"status\":\"ok\",\"result\":{\"link\":{\"linkid\":\"7\",\"poster\":{\"userid\":\"42\",\"username\":\"Author\"},\"content\":\"<p>Body</p>\"},\"current_user\":{\"follow_status\":" + value + "}}}";
+        using var api = new HeyReadApi(accountHandler: new FakeHandler(body)); api.SetSession(new("pkey=test", "1", "Viewer", ""));
+        var story = new Story("7", Source.HEYBOX, "Title", ""); var article = await api.ArticleAsync(story, TestContext.Current.CancellationToken); Assert.Equal(expected, article.Followed);
+        Assert.Equal(expected, await api.AuthorFollowStatusAsync(story, "42", TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApiException>(() => api.AuthorFollowStatusAsync(story, "another-author", TestContext.Current.CancellationToken));
+    }
     private static string TemporaryRoot() => Path.Combine(Path.GetTempPath(), "heyread-refinement-" + Guid.NewGuid());
     private sealed class DelayedContent : HttpContent
     {

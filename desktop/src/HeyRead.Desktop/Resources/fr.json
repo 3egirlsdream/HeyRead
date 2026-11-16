@@ -185,5 +185,9 @@
   "原文与目标语言相同或不支持此语言组合": "Les langues source et cible sont identiques, ou cette combinaison n’est pas prise en charge",
   "导航收藏": "Favoris",
   "此内容已被屏蔽": "Ce contenu est bloqué",
-  "临时显示内容": "Afficher temporairement"
+  "临时显示内容": "Afficher temporairement",
+  "返回文章与当前内容不一致": "L’article reçu ne correspond pas au contenu sélectionné",
+  "返回作者与当前文章不一致": "L’auteur reçu ne correspond pas à cet article",
+  "官方暂未返回关注关系，请重试": "Statut de suivi indisponible. Réessayez.",
+  "作者未提供 ID": "L’identifiant de l’auteur est indisponible"
 }

@@ -185,5 +185,9 @@
   "原文与目标语言相同或不支持此语言组合": "The source and target languages are the same, or this language pair is unsupported",
   "导航收藏": "Favorites",
   "此内容已被屏蔽": "This content is blocked",
-  "临时显示内容": "Reveal temporarily"
+  "临时显示内容": "Reveal temporarily",
+  "返回文章与当前内容不一致": "The returned article does not match the selected content",
+  "返回作者与当前文章不一致": "The returned author does not match this article",
+  "官方暂未返回关注关系，请重试": "Follow status is unavailable. Please retry.",
+  "作者未提供 ID": "The author ID is unavailable"
 }

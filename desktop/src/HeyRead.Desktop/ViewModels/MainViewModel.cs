@@ -203,6 +203,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var enabled = action switch { "like" => snapshot.Liked != true, "favorite" => snapshot.Favorited != true, "follow" => snapshot.Followed != true, "support" => reply?.Supported != true, _ => true };
         try
         {
+            if (action == "follow" && snapshot.Followed == null)
+            {
+                var author = snapshot.Story.Profile?.Id; if (string.IsNullOrEmpty(author)) throw new InvalidOperationException("作者未提供 ID");
+                var followed = await Api.AuthorFollowStatusAsync(snapshot.Story, author, token); token.ThrowIfCancellationRequested();
+                if (Article?.Story.Key != snapshot.Story.Key) return;
+                Article = Article with { Followed = followed }; ContentChanged?.Invoke();
+                if (followed) return; // The visible Follow action must never unfollow an unknown relationship.
+            }
             await Api.SocialAsync(snapshot.Story, action, enabled, text, snapshot.AuthCode, reply, token);
             token.ThrowIfCancellationRequested();
             if (Article?.Story.Key != snapshot.Story.Key) return;
