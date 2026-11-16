@@ -3,11 +3,15 @@
 ## Verified locally
 
 - SDK 10.0.201, Avalonia 12.1.6, macOS arm64 build; Swift bridge arm64 targets macOS 15.
-- 18 targeted automated cases passed before final packaging: upstream signer vector, cookie isolation, redirect blocking, reply form fields, Steam-only interaction guard, rule interchange/limits/duplicates, cloud history content wrappers, CAPTCHA proof validation, local drafts/offsets and repeated window/settings navigation, background image decoding.
+- 19 targeted automated cases passed before final packaging: upstream signer vector, cookie isolation, redirect blocking, reply form fields, Steam-only interaction guard, rule interchange/limits/duplicates, cloud history content wrappers, CAPTCHA proof validation, local drafts/offsets and repeated window/settings navigation, background image decoding.
 - Read-only real public API probe: Heybox feed 10 rows; search 6; article 22 blocks; Steam name search 10; AppID 570 resolved; announcements 10; official QR challenge returned. No account writes performed by the probe.
 - Real native UI: discovery and article navigation, compact settings and dark theme, QR scan/confirmation completed by user, cloud favorites returned 15 rows, followed stream returned 30 rows, and 900×640 list-to-reader switching succeeded.
 - The first live history check showed zero normalized rows; inspection found missing `content` unwrapping. This was fixed and covered by a regression case. A later authenticated real-history check is still required.
 - First native image run exposed a background-thread read of Avalonia `Height`; decoding now captures width on the UI thread and has an asynchronous regression case.
+
+- Final native UI theme switching verified after retaining the native menu instance; both 1280×800 themes and 900×640 reading were captured.
+- A separate Keychain service passed native bridge save/read/delete verification, using non-authenticating fixture data.
+- Local arm64/x64 development DMGs passed checksum verification; the arm64 image mounted and its copied app passed strict signature verification.
 
 ## Pending manual acceptance
 

@@ -14,6 +14,13 @@ public sealed class FakeHandler(string body) : HttpMessageHandler
 public sealed class CoreTests
 {
     [Fact]
+    public void HistoryStoresBoundedMetadataInsteadOfRichArticleCopies()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "heyread-history-" + Guid.NewGuid()); var store = new LibraryStore(root);
+        var text = new string('a', 100000); store.Visit(new("1", Source.HEYBOX, "Title", "Summary", Body: text, Blocks: [new(BlockKind.Paragraph, text)]));
+        var restored = new LibraryStore(root); Assert.Null(restored.History[0].Story.Blocks); Assert.Equal("Summary", restored.History[0].Story.Body); Assert.True(new FileInfo(Path.Combine(root, "history.json")).Length < 10000); Directory.Delete(root, true);
+    }
+    [Fact]
     public void HistoryUnwrapsContentAndNeverUsesReaderIdentity()
     {
         var root = JsonNode.Parse("""{"status":"ok","result":{"history_visit":[{"id":"record-1","userid":"reader","content":{"linkid":"post-1","title":"T","poster":{"userid":"writer","username":"Author"}}}]}}""")!;
