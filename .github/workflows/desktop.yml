@@ -1,0 +1,51 @@
+name: macOS desktop
+on:
+  push:
+    paths: ['desktop/**', '.github/workflows/desktop.yml']
+  pull_request:
+    paths: ['desktop/**', '.github/workflows/desktop.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop-tests:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: desktop/global.json
+      - name: Build native bridge
+        run: ./scripts/build-native.sh
+      - name: Restore locked dependencies
+        run: dotnet restore HeyRead.slnx --locked-mode
+      - name: Test desktop protocols and UI
+        run: dotnet test tests/HeyRead.Tests --no-restore -c Release --logger trx --results-directory TestResults
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-test-results
+          path: desktop/TestResults
+  package:
+    needs: desktop-tests
+    runs-on: macos-15
+    strategy:
+      matrix:
+        rid: [osx-arm64, osx-x64]
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: desktop/global.json
+      - run: ./scripts/package-macos.sh '${{ matrix.rid }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HeyRead-${{ matrix.rid }}
+          path: desktop/artifacts/*.dmg
+          retention-days: 14

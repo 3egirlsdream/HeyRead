@@ -1,0 +1,26 @@
+<Application xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="HeyRead.Desktop.App" RequestedThemeVariant="Default">
+<Application.Resources><ResourceDictionary><ResourceDictionary.ThemeDictionaries>
+<ResourceDictionary x:Key="Light">
+<SolidColorBrush x:Key="Surface">#FFFFFF</SolidColorBrush><SolidColorBrush x:Key="Sidebar">#F3F4F6</SolidColorBrush><SolidColorBrush x:Key="Subtle">#F7F8FA</SolidColorBrush><SolidColorBrush x:Key="Line">#E5E7EB</SolidColorBrush><SolidColorBrush x:Key="Ink">#1E2025</SolidColorBrush><SolidColorBrush x:Key="Muted">#747A86</SolidColorBrush><SolidColorBrush x:Key="Selection">#E9F0FE</SolidColorBrush>
+</ResourceDictionary>
+<ResourceDictionary x:Key="Dark">
+<SolidColorBrush x:Key="Surface">#1C1D20</SolidColorBrush><SolidColorBrush x:Key="Sidebar">#24262B</SolidColorBrush><SolidColorBrush x:Key="Subtle">#24262B</SolidColorBrush><SolidColorBrush x:Key="Line">#34363D</SolidColorBrush><SolidColorBrush x:Key="Ink">#F0F1F4</SolidColorBrush><SolidColorBrush x:Key="Muted">#A1A7B3</SolidColorBrush><SolidColorBrush x:Key="Selection">#263A5B</SolidColorBrush>
+</ResourceDictionary>
+</ResourceDictionary.ThemeDictionaries><SolidColorBrush x:Key="Accent">#2563D9</SolidColorBrush></ResourceDictionary></Application.Resources>
+<Application.Styles><FluentTheme />
+<Style Selector="Window"><Setter Property="Background" Value="{DynamicResource Surface}"/><Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="FontFamily" Value="PingFang SC, Helvetica Neue, Arial"/><Setter Property="FontSize" Value="13"/></Style>
+<Style Selector="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Style>
+<Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource Muted}"/></Style>
+<Style Selector="Button"><Setter Property="MinHeight" Value="30"/><Setter Property="Padding" Value="10,5"/><Setter Property="CornerRadius" Value="8"/><Setter Property="FontSize" Value="13"/></Style>
+<Style Selector="Button.flat"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/></Style>
+<Style Selector="Button.nav"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="Height" Value="36"/></Style>
+<Style Selector="Button.nav.selected"><Setter Property="Background" Value="{DynamicResource Selection}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></Style>
+<Style Selector="Button.primary"><Setter Property="Background" Value="{DynamicResource Accent}"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderThickness" Value="0"/></Style>
+<Style Selector="Button:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/></Style>
+<Style Selector="TextBox"><Setter Property="MinHeight" Value="32"/><Setter Property="CornerRadius" Value="8"/><Setter Property="FontSize" Value="13"/></Style>
+<Style Selector="ComboBox"><Setter Property="MinHeight" Value="30"/><Setter Property="CornerRadius" Value="8"/><Setter Property="FontSize" Value="13"/></Style>
+<Style Selector="ListBox"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="0"/></Style>
+<Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style>
+<Style Selector="ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Selection}"/></Style>
+<Style Selector="Border.group"><Setter Property="Background" Value="{DynamicResource Subtle}"/><Setter Property="CornerRadius" Value="10"/><Setter Property="Padding" Value="16"/><Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/></Style>
+</Application.Styles></Application>

@@ -90,3 +90,12 @@ keystore.properties
 
 # Local output from the release packaging helper.
 /artifacts/
+
+# Independent macOS client build and isolated runtime output
+/desktop/**/bin/
+/desktop/**/obj/
+/desktop/native/build/
+/desktop/artifacts/
+/desktop/**/TestResults/
+*.dmg
+*.dylib
