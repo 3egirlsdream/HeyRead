@@ -51,7 +51,7 @@ public sealed partial class MainWindow
     private void RenderSidebar()
     {
         var logo = Brush(new Border { Child = Icons.Get("book_open_filled", 25, "OnAccent"), Width = 39, Height = 39, CornerRadius = new(12), Padding = new(7) }, Border.BackgroundProperty, "AccentFill");
-        var brandName = Text(T("盒阅"), 20, true); brandName.LineHeight = 22; var brandSubtitle = Text("HeyRead", 16, muted: true); brandSubtitle.LineHeight = 20;
+        var brandName = Text("小黑盒", 20, true); brandName.LineHeight = 22; var brandSubtitle = Text("Community For Mac", 11.5, muted: true); brandSubtitle.LineHeight = 20;
         var brand = Row(14, logo, Stack(0, brandName, brandSubtitle)); brand.Margin = new(26, 64, 18, 30);
         var nav = Stack(8); nav.Margin = new(13, 0);
         foreach (var (page, label, icon) in new[] { ("discover", "发现", "compass_northwest"), ("dynamic", "动态", "chat"), ("games", "游戏", "games"), ("favorites", "导航收藏", "bookmark"), ("history", "历史", "history") })

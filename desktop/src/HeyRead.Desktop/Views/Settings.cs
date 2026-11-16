@@ -48,7 +48,7 @@ public sealed partial class MainWindow
                 }
                 break;
             default:
-                content.Children.Add(Text(T("盒阅 · HeyRead"), 28, true)); content.Children.Add(Text("macOS · 0.2.0", 14, muted: true));
+                content.Children.Add(Text(T(ProductInfo.DisplayName), 28, true)); content.Children.Add(Text("macOS · " + ProductInfo.Version, 14, muted: true)); content.Children.Add(BuildUpdateSettings());
                 content.Children.Add(Group(Text("Avalonia 12.1.6 · .NET 10.0.201"), Text(T("基于 23ye/HeyRead 独立开发的 macOS 客户端。上游代码采用 MIT 许可证。"), 13), Button("GitHub", () => OpenUrl("https://github.com/3egirlsdream/HeyRead")), Button(T("上游项目"), () => OpenUrl("https://github.com/23ye/HeyRead"))));
                 content.Children.Add(Group(Text(T("第三方说明"), 17, true), Text(T("HeyRead · MIT\nAvalonia · MIT\n.NET · MIT\nCommunityToolkit.Mvvm · MIT\nAngleSharp · MIT\nQRCoder · MIT\nMicrosoft Fluent System Icons · MIT\nApple Translation、AVKit、AppKit 为系统框架。")), Text(T("FKFinder 用作界面与工程参考；新增组件独立实现。"), 12, muted: true))); break;
         }

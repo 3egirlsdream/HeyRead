@@ -18,15 +18,15 @@ jobs:
       run:
         working-directory: desktop
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: desktop/global.json
       - name: Restore locked dependencies
         run: dotnet restore HeyRead.slnx --locked-mode
       - name: Test desktop protocols and UI
         run: dotnet test tests/HeyRead.Tests --no-restore -c Release --logger trx --results-directory TestResults
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: desktop-test-results
@@ -41,16 +41,16 @@ jobs:
       run:
         working-directory: desktop
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: desktop/global.json
       - run: ./scripts/package-macos.sh '${{ matrix.rid }}'
       - name: Start the Intel self-contained runtime
         if: matrix.rid == 'osx-x64'
-        run: ./artifacts/osx-x64/HeyRead.app/Contents/MacOS/HeyRead --version
-      - uses: actions/upload-artifact@v4
+        run: ./artifacts/osx-x64/xiaoheihe-community-formac.app/Contents/MacOS/xiaoheihe-community-formac --version
+      - uses: actions/upload-artifact@v6
         with:
-          name: HeyRead-${{ matrix.rid }}
+          name: xiaoheihe-community-formac-${{ matrix.rid }}
           path: desktop/artifacts/*.dmg
           retention-days: 14

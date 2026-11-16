@@ -20,7 +20,7 @@ public sealed partial class MainWindow
     {
         var window = Dialog(title, width, height); var close = Button(T("关闭"), window.Close); var layout = new Grid { RowDefinitions = new("*,Auto"), Margin = new(24) }; layout.Children.Add(new ScrollViewer { Content = content }); Grid.SetRow(close, 1); close.HorizontalAlignment = HorizontalAlignment.Right; close.Margin = new(0, 16, 0, 0); layout.Children.Add(close); window.Content = layout; await window.ShowDialog(this);
     }
-    private Task Notice(string message) => ShowDialogContent("盒阅", Text(T(message)), 460, 240);
+    private Task Notice(string message) => ShowDialogContent(ProductInfo.DisplayName, Text(T(message)), 460, 240);
     private async Task<bool> Confirm(string title, string description)
     {
         var window = Dialog(title, 420, 220); var yes = Button(T("确认"), () => window.Close(true), "primary"); var no = Button(T("取消"), () => window.Close(false)); window.Content = Stack(24, Text(T(title), 18, true), Text(T(description)), Row(8, no, yes)); ((Control)window.Content).Margin = new(24); return await window.ShowDialog<bool>(this);
@@ -103,7 +103,7 @@ public sealed partial class MainWindow
         var save = AsyncButton(T("保存图片"), async () =>
         {
             var filePath = local; if (filePath == null) return;
-            var file = await window.StorageProvider.SaveFilePickerAsync(new() { Title = T("保存图片"), SuggestedFileName = "HeyRead-image" + ImageService.Extension(filePath) });
+            var file = await window.StorageProvider.SaveFilePickerAsync(new() { Title = T("保存图片"), SuggestedFileName = ProductInfo.PackageName + "-image" + ImageService.Extension(filePath) });
             if (file != null) { await using var output = await file.OpenWriteAsync(); if (output.CanSeek) output.SetLength(0); await using var input = File.OpenRead(filePath); await input.CopyToAsync(output); }
         });
         var tools = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };

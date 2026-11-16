@@ -40,7 +40,7 @@ public sealed class HeyReadApi : IDisposable
         if (account && login && session == null) throw new ApiException("请先登录小黑盒账号", "login");
         var uri = SignedUri(account ? "https://" + OfficialHost : Gateway(), path, parameters, account && login ? session?.UserId : null);
         using var request = new HttpRequestMessage(form == null ? HttpMethod.Get : HttpMethod.Post, uri);
-        request.Headers.UserAgent.ParseAdd("HeyRead/0.1 (macOS)"); request.Headers.Referrer = new("https://www.xiaoheihe.cn/"); request.Headers.Accept.Add(new("application/json"));
+        request.Headers.UserAgent.ParseAdd(ProductInfo.PackageName + "/" + ProductInfo.Version + " (macOS)"); request.Headers.Referrer = new("https://www.xiaoheihe.cn/"); request.Headers.Accept.Add(new("application/json"));
         if (account)
         {
             if (uri.Scheme != "https" || uri.Host != OfficialHost) throw new InvalidOperationException("已阻止账号跨域请求");
@@ -215,7 +215,7 @@ public sealed class HeyReadApi : IDisposable
     }
     public async Task<JsonNode> PublicJsonAsync(string url, CancellationToken ct)
     {
-        if (J.Https(url) == null) throw new ArgumentException("需要 HTTPS 地址"); using var request = new HttpRequestMessage(HttpMethod.Get, url); request.Headers.UserAgent.ParseAdd("HeyRead/0.1 (macOS)");
+        if (J.Https(url) == null) throw new ArgumentException("需要 HTTPS 地址"); using var request = new HttpRequestMessage(HttpMethod.Get, url); request.Headers.UserAgent.ParseAdd(ProductInfo.PackageName + "/" + ProductInfo.Version + " (macOS)");
         using var response = await _public.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct); response.EnsureSuccessStatusCode(); return JsonNode.Parse(await ReadLimitedAsync(response, 8 * 1024 * 1024, ct)) ?? throw new ApiException("响应为空");
     }
     public void Dispose() { _public.Dispose(); _account.Dispose(); }

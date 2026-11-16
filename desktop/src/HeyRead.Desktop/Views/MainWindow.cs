@@ -53,7 +53,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(MainViewModel vm)
     {
         _vm = vm; DataContext = vm; _strings = new(vm.Prefs.Language); _images = new(Path.Combine(vm.Store.Root, "cache")); _gameDetails = new(vm.Api);
-        Title = _vm.VisualFixture ? "盒阅 · HeyRead — A 视觉样例" : "盒阅 · HeyRead"; Width = 1280; Height = 800; MinWidth = 900; MinHeight = 640;
+        Title = _vm.VisualFixture ? ProductInfo.DisplayName + " — A 视觉样例" : ProductInfo.DisplayName; Width = 1280; Height = 800; MinWidth = 900; MinHeight = 640;
         if (_vm.VisualFixture && Environment.GetEnvironmentVariable("HEYREAD_VISUAL_VIEWPORT") == "narrow") { Width = 900; Height = 640; }
         WindowStartupLocation = WindowStartupLocation.CenterScreen; ExtendClientAreaToDecorationsHint = true; ExtendClientAreaTitleBarHeightHint = 48;
         _root.ColumnDefinitions = new("210,*"); Content = _root; _root.Children.Add(_sidebar);
@@ -70,9 +70,9 @@ public sealed partial class MainWindow : Window
         vm.PropertyChanged += OnViewModelChanged;
         SizeChanged += (_, _) => { UpdateResponsive(); if (!_rendering && _vm.Page is not ("settings" or "account" or "games")) RenderReader(); }; KeyDown += OnKeys;
         if (Application.Current?.PlatformSettings is { } settings) settings.ColorValuesChanged += OnSystemColorsChanged;
-        Opened += async (_, _) => { _notifications = new WindowNotificationManager(this) { MaxItems = 3, Position = NotificationPosition.BottomRight }; ApplyTheme(); await vm.InitializeAsync(); };
+        Opened += async (_, _) => { _notifications = new WindowNotificationManager(this) { MaxItems = 3, Position = NotificationPosition.BottomRight }; ApplyTheme(); _ = CheckAfterStartup(); await vm.InitializeAsync(); };
         Closing += (_, _) => { SaveOffsets(); vm.Store.SavePreferences(); };
-        Closed += (_, _) => { _viewportTimer?.Stop(); _navigationMotion?.Cancel(); _navigationMotion?.Dispose(); if (Application.Current?.PlatformSettings is { } settings) settings.ColorValuesChanged -= OnSystemColorsChanged; if (_listScroll != null) _listScroll.ScrollChanged -= OnListScrollChanged; vm.SettingsChanged -= OnSettingsChanged; vm.PropertyChanged -= OnViewModelChanged; vm.ContentChanged -= Render; _readerScroll.Content = null; vm.Suspend(); _images.Dispose(); _referenceAssets.Dispose(); };
+        Closed += (_, _) => { _updateLifetime.Cancel(); _updates.Dispose(); _viewportTimer?.Stop(); _navigationMotion?.Cancel(); _navigationMotion?.Dispose(); if (Application.Current?.PlatformSettings is { } settings) settings.ColorValuesChanged -= OnSystemColorsChanged; if (_listScroll != null) _listScroll.ScrollChanged -= OnListScrollChanged; vm.SettingsChanged -= OnSettingsChanged; vm.PropertyChanged -= OnViewModelChanged; vm.ContentChanged -= Render; _readerScroll.Content = null; vm.Suspend(); _images.Dispose(); _referenceAssets.Dispose(); };
         ConfigureMenus(); ApplyTheme(); RenderSidebar(); Render();
     }
     private async Task Navigate(string page)
@@ -233,6 +233,7 @@ public sealed partial class MainWindow : Window
         root.Items.Add(new NativeMenuItem { Header = T("浏览"), Menu = navigation });
         var reading = new NativeMenu(); var original = new NativeMenuItem { Header = T("打开原文") }; original.Click += (_, _) => OpenUrl(_vm.Article?.Story.Url); reading.Items.Add(original); _menuLabels.Add((original, "打开原文")); var translate = new NativeMenuItem { Header = T("翻译为中文") }; translate.Click += (_, _) => Run(_vm.TranslateAsync); reading.Items.Add(translate); _menuLabels.Add((translate, "翻译为中文")); root.Items.Add(new NativeMenuItem { Header = T("阅读"), Menu = reading });
         foreach (var item in root.Items.OfType<NativeMenuItem>()) { if (item.Header is { } label) _menuLabels.Add((item, item.Menu == navigation ? "浏览" : "阅读")); foreach (var child in item.Menu?.Items.OfType<NativeMenuItem>() ?? []) if (!_menuLabels.Any(x => x.Item == child) && child.Header is { } childLabel) _menuLabels.Add((child, childLabel.ToString()!)); }
+        var updateItem = new NativeMenuItem { Header = T("检查更新") }; updateItem.Click += (_, _) => Run(() => CheckForUpdates(true)); root.Items.Add(updateItem); _menuLabels.Add((updateItem, "检查更新"));
         NativeMenu.SetMenu(this, root);
     }
     private readonly Dictionary<string, FontFamily> _fontFamilies = [];
@@ -353,7 +354,7 @@ public sealed partial class MainWindow : Window
     }
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(_vm.Toast) && _vm.Toast.Length > 0) _notifications?.Show(new Notification("盒阅", T(_vm.Toast), NotificationType.Information, TimeSpan.FromSeconds(4)));
+        if (e.PropertyName == nameof(_vm.Toast) && _vm.Toast.Length > 0) _notifications?.Show(new Notification(ProductInfo.DisplayName, T(_vm.Toast), NotificationType.Information, TimeSpan.FromSeconds(4)));
         if (e.PropertyName is nameof(_vm.Loading) or nameof(_vm.DetailLoading) or nameof(_vm.CommentsMode) or nameof(_vm.Translating)) Render();
     }
     private async Task Social(string action, Comment? comment = null) { if (_vm.VisualFixture) { _vm.Toast = "离线样例不执行账号操作"; return; } if (_vm.Api.Session == null) { await LoginDialog(); if (_vm.Api.Session == null) return; } try { await _vm.SocialAsync(action, comment); } catch (Exception e) { await Notice(e.Message); } }

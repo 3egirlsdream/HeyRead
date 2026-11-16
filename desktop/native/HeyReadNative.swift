@@ -92,7 +92,7 @@ private struct TranslationView: View {
     guard let data = String(cString: input).data(using: .utf8), let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let strings = json["text"] as? [String] else { return }
     let job = TranslationJob(id, callback); jobs[id] = job
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 340), styleMask: [.titled, .closable], backing: .buffered, defer: false)
-    job.window = window; window.delegate = job; window.isReleasedWhenClosed = false; window.title = "盒阅 · 翻译"; window.contentView = NSHostingView(rootView: TranslationView(job: job, strings: strings, target: json["target"] as? String ?? "zh-Hans")); window.center(); window.makeKeyAndOrderFront(nil)
+    job.window = window; window.delegate = job; window.isReleasedWhenClosed = false; window.title = "小黑盒Community For Mac · 翻译"; window.contentView = NSHostingView(rootView: TranslationView(job: job, strings: strings, target: json["target"] as? String ?? "zh-Hans")); window.center(); window.makeKeyAndOrderFront(nil)
 }
 @_cdecl("hr_translate_cancel") public func cancelTranslation(_ id: Int64) { jobs[id]?.finish(["error": "翻译已取消"]) }
 @_cdecl("hr_gif_create") public func gifCreate(_ path: UnsafePointer<CChar>) -> UnsafeMutableRawPointer? {
