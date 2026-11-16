@@ -277,11 +277,14 @@ public sealed partial class MainWindow : Window
             text.Inlines!.Add(new Run(value) { FontWeight = run.Bold ? FontWeight.Bold : FontWeight.Normal, FontStyle = run.Italic ? FontStyle.Italic : FontStyle.Normal, FontFamily = run.Code ? new("Menlo, Monaco") : text.FontFamily });
         }
     }
+    private NativeMenu? _nativeMenu;
+    private readonly List<(NativeMenuItem Item, string Key)> _menuLabels = [];
     private void ConfigureMenus()
     {
-        var root = new NativeMenu();
+        if (_nativeMenu != null) { foreach (var (item, key) in _menuLabels) item.Header = T(key); return; }
+        var root = new NativeMenu(); _nativeMenu = root;
         var navigation = new NativeMenu();
-        foreach (var (label, page) in new[] { ("发现", "discover"), ("推荐动态", "dynamic"), ("关注动态", "following"), ("Steam 游戏", "games"), ("云端收藏", "favorites"), ("本机历史", "history"), ("设置", "settings") }) { var item = new NativeMenuItem { Header = T(label) }; item.Click += (_, _) => Run(() => Navigate(page)); navigation.Items.Add(item); }
+        foreach (var (label, page) in new[] { ("发现", "discover"), ("推荐动态", "dynamic"), ("关注动态", "following"), ("Steam 游戏", "games"), ("云端收藏", "favorites"), ("本机历史", "history"), ("设置", "settings") }) { var item = new NativeMenuItem { Header = T(label) }; item.Click += (_, _) => Run(() => Navigate(page)); navigation.Items.Add(item); _menuLabels.Add((item, label)); }
         root.Items.Add(new NativeMenuItem { Header = "浏览", Menu = navigation });
         var reading = new NativeMenu(); var original = new NativeMenuItem { Header = T("打开原文") }; original.Click += (_, _) => OpenUrl(_vm.Article?.Story.Url); reading.Items.Add(original); var translate = new NativeMenuItem { Header = T("翻译为中文") }; translate.Click += (_, _) => Run(_vm.TranslateAsync); reading.Items.Add(translate); root.Items.Add(new NativeMenuItem { Header = "阅读", Menu = reading });
         NativeMenu.SetMenu(this, root);
