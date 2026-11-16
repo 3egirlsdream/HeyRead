@@ -22,7 +22,7 @@ For an isolated real-data run, set `HEYREAD_TEST_ROOT` to a dedicated absolute d
 ./scripts/package-macos.sh osx-x64
 ```
 
-Produces `xiaoheihe-community-formac.app`, update ZIP and DMG files in `desktop/artifacts/`. Both Apple Silicon and Intel native bridges compile against the macOS 15 deployment target. The default signature is ad hoc. To sign and notarize, provide `HEYREAD_SIGN_IDENTITY` and `HEYREAD_NOTARY_PROFILE`; these are optional local environment variables, never committed. Ad hoc artifacts are development builds, not a notarized public release.
+Produces `xiaoheihe-community-formac.app`, update ZIP and DMG files in `desktop/artifacts/`. Both Apple Silicon and Intel native bridges compile against the macOS 15 deployment target. The default signature is ad hoc. To sign and notarize, provide `XIAOHEIHE_SIGN_IDENTITY` and `XIAOHEIHE_NOTARY_PROFILE`; these are optional local environment variables, never committed. The default GitHub artifacts are not Developer ID notarized.
 
 ## Implementation
 
