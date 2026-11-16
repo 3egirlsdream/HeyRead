@@ -45,8 +45,9 @@ public sealed class LibraryStore
     public void SavePreferences() => Write("preferences.json", Preferences);
     public void Visit(Story story, double? article = null, double? comment = null)
     {
-        lock (_sync) { if (!Preferences.RecordHistory) return; var old = History.FirstOrDefault(x => x.Story.Key == story.Key); History.RemoveAll(x => x.Story.Key == story.Key); History.Insert(0, new(story, DateTimeOffset.UtcNow, article ?? old?.ArticleOffset ?? 0, comment ?? old?.CommentOffset ?? 0)); if (History.Count > 1000) History.RemoveRange(1000, History.Count - 1000); Write("history.json", History); }
+        lock (_sync) { if (!Preferences.RecordHistory) return; var old = History.FirstOrDefault(x => x.Story.Key == story.Key); History.RemoveAll(x => x.Story.Key == story.Key); History.Insert(0, new(Summary(story), DateTimeOffset.UtcNow, article ?? old?.ArticleOffset ?? 0, comment ?? old?.CommentOffset ?? 0)); if (History.Count > 1000) History.RemoveRange(1000, History.Count - 1000); Write("history.json", History); }
     }
+    public static Story Summary(Story story) => story with { Body = story.Excerpt, Blocks = null };
     public void ClearHistory() { History.Clear(); Write("history.json", History); }
     public void Search(string query, Destination? scope)
     {

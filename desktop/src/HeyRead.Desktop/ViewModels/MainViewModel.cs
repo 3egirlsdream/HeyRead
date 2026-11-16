@@ -132,9 +132,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Translated = ""; Translating = false; CommentsMode = false; DetailError = ""; Article = new(story, []); Comments.Clear(); DetailLoading = true; ContentChanged?.Invoke();
         try
         {
-            var article = story.Source == Source.DEMO ? new Article(story, []) : await Api.ArticleAsync(story, token);
+            if (story.Source == Source.STEAM && story.Blocks == null && story.AppId is { } appId && story.PublishedAt is { } published)
+            {
+                var fresh = await Steam.NewsAsync(new(appId, story.Author, story.Image), (published + 1).ToString(), token);
+                story = fresh.Items.FirstOrDefault(x => x.Key == story.Key) ?? story with { Notice = "公告当前不可用，已显示本机摘要，可打开原文继续阅读" };
+            }
+            var article = story.Source == Source.DEMO ? new Article(DemoStories.Items.FirstOrDefault(x => x.Key == story.Key) ?? story, []) : await Api.ArticleAsync(story, token);
             token.ThrowIfCancellationRequested(); Article = article; foreach (var c in article.Comments) Comments.Add(c); _commentPage = 1; _moreComments = article.HasMoreComments;
-            Store.Visit(article.Story); Prefs.LastStory = article.Story; Store.SavePreferences();
+            Store.Visit(article.Story); Prefs.LastStory = LibraryStore.Summary(article.Story); Store.SavePreferences();
         }
         catch (OperationCanceledException) { }
         catch (Exception e) { if (!token.IsCancellationRequested) { DetailError = e.Message; Expired(e); } }

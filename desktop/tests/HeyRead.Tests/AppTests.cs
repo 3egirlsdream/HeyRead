@@ -23,7 +23,7 @@ public sealed class AppTests
     [AvaloniaFact]
     public async Task WindowCanNavigateRepeatedlyAndChangeThemesWithoutReparenting()
     {
-        var root = Path.Combine(Path.GetTempPath(), "heyread-test-" + Guid.NewGuid()); var store = new LibraryStore(root);
+        var root = Path.Combine(Path.GetTempPath(), "heyread-test-" + Guid.NewGuid()); var store = new LibraryStore(root); store.Preferences.NoImages = true;
         using var api = new HeyReadApi(new FakeHandler("{\"status\":\"ok\",\"result\":{\"links\":[]}}"));
         using var vm = new MainViewModel(api, new(api), store, new MacSessionStore(true), new NoTranslation());
         var window = new MainWindow(vm); window.Show();
