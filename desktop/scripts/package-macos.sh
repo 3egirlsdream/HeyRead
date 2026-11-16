@@ -10,7 +10,7 @@ out="$(cd "$out" && pwd)"
 ./scripts/build-icon.sh
 app="$out/$rid/HeyRead.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-dotnet publish src/HeyRead.Desktop -c Release -r "$rid" --self-contained true -p:PublishSingleFile=false -o "$app/Contents/MacOS"
+dotnet publish src/HeyRead.Desktop -c Release -r "$rid" --self-contained true -p:PublishSingleFile=false -p:RestoreLockedMode=true -o "$app/Contents/MacOS"
 cat > "$app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>
 <key>CFBundleIconFile</key><string>AppIcon</string><key>CFBundleExecutable</key><string>HeyRead</string><key>CFBundleIdentifier</key><string>cn.heyread.desktop</string><key>CFBundleName</key><string>HeyRead</string><key>CFBundleDisplayName</key><string>盒阅 · HeyRead</string><key>CFBundleVersion</key><string>1</string><key>CFBundleShortVersionString</key><string>0.1.0</string><key>CFBundlePackageType</key><string>APPL</string><key>LSMinimumSystemVersion</key><string>15.0</string><key>NSHighResolutionCapable</key><true/><key>NSPrincipalClass</key><string>NSApplication</string><key>LSApplicationCategoryType</key><string>public.app-category.news</string><key>CFBundleLocalizations</key><array><string>zh-Hans</string><string>zh-Hant</string><string>en</string><string>fr</string></array></dict></plist>

@@ -9,6 +9,7 @@
         "contentHash": "HF2owdhRhy84PJ7dk6e7Olc8D3S8RhU+BSXgCpTcafODrHzUUqUquCUWrM81/PeKHKlFA86LCdZBAQCQRK2y7w=="
       }
     },
-    "net10.0/osx-arm64": {}
+    "net10.0/osx-arm64": {},
+    "net10.0/osx-x64": {}
   }
 }

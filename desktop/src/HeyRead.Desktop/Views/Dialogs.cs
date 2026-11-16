@@ -91,7 +91,7 @@ public sealed partial class MainWindow
             load?.Cancel(); load?.Dispose(); load = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); var token = load.Token; status.Text = T("正在加载…"); host.Content = null; bitmap?.Dispose(); bitmap = null;
             try
             {
-                local = await _images.FetchAsync(urls[index], token); using var stream = File.OpenRead(local); bitmap = Bitmap.DecodeToWidth(stream, 2048); var signature = new byte[6]; using (var source = File.OpenRead(local)) _ = source.Read(signature);
+                local = await _images.FetchAsync(urls[index], token); bitmap = ImageService.Decode(local, 2048); var signature = new byte[6]; using (var source = File.OpenRead(local)) _ = source.Read(signature);
                 host.Content = OperatingSystem.IsMacOS() && System.Text.Encoding.ASCII.GetString(signature).StartsWith("GIF8") ? new NativeGif(local) : new Image { Source = bitmap, Stretch = Stretch.Uniform }; status.Text = $"{index + 1} / {urls.Length}"; Fit();
             }
             catch (OperationCanceledException) { }

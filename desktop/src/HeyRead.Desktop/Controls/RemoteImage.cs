@@ -28,6 +28,19 @@ public sealed class ImageService(string cacheRoot, HttpMessageHandler? handler =
         }
         finally { _slots.Release(); }
     }
+    public static Bitmap Decode(string path, int maxSide)
+    {
+        int width, height;
+        using (var input = File.OpenRead(path))
+        using (var codec = SkiaSharp.SKCodec.Create(input))
+        {
+            if (codec == null) throw new IOException("图片格式不受支持");
+            width = codec.Info.Width; height = codec.Info.Height;
+        }
+        if (width <= 0 || height <= 0 || width > 100000 || height > 100000) throw new IOException("图片尺寸无效");
+        using var stream = File.OpenRead(path);
+        return height > width ? Bitmap.DecodeToHeight(stream, Math.Min(height, maxSide)) : Bitmap.DecodeToWidth(stream, Math.Min(width, maxSide));
+    }
     public void Dispose() { _http.Dispose(); _slots.Dispose(); }
 }
 public sealed class RemoteImage : Border
@@ -45,7 +58,7 @@ public sealed class RemoteImage : Border
         {
             var path = await _service.FetchAsync(_url, token); if (OperatingSystem.IsMacOS()) { var header = new byte[6]; using (var file = File.OpenRead(path)) _ = file.Read(header); if (Encoding.ASCII.GetString(header).StartsWith("GIF8")) { if (!token.IsCancellationRequested) Child = new NativeGif(path); return; } }
             var decodeWidth = Height <= 100 ? 240 : 1600;
-            var bitmap = await Task.Run(() => { using var input = File.OpenRead(path); return Bitmap.DecodeToWidth(input, decodeWidth); }, token); if (token.IsCancellationRequested) bitmap.Dispose(); else { _bitmap = bitmap; _image.Source = bitmap; }
+            var bitmap = await Task.Run(() => { return ImageService.Decode(path, decodeWidth); }, token); if (token.IsCancellationRequested) bitmap.Dispose(); else { _bitmap = bitmap; _image.Source = bitmap; }
         }
         catch (Exception error) when (error is not OutOfMemoryException) { if (!token.IsCancellationRequested) Child = Ui.Text("图片暂不可用", 12, muted: true); }
     }

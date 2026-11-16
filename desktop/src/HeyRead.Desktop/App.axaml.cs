@@ -16,7 +16,8 @@ public sealed partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime lifetime)
         {
             var testRoot = Environment.GetEnvironmentVariable("HEYREAD_TEST_ROOT");
-            var store = new LibraryStore(testRoot ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HeyRead"));
+            var defaultRoot = OperatingSystem.IsMacOS() ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "HeyRead") : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HeyRead");
+            var store = new LibraryStore(testRoot ?? defaultRoot);
             _api = new() { Gateway = () => store.Preferences.Gateway, VerifyCaptcha = Native.VerifyCaptchaAsync };
             var sessions = new MacSessionStore(testRoot != null, testRoot); _api.SetSession(sessions.Load());
             var vm = new MainViewModel(_api, new SteamService(_api), store, sessions, new AppleTranslation());
