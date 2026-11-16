@@ -1,6 +1,7 @@
 name: macOS desktop
 on:
   push:
+    branches: [main]
     paths: ['desktop/**', '.github/workflows/desktop.yml']
   pull_request:
     paths: ['desktop/**', '.github/workflows/desktop.yml']
