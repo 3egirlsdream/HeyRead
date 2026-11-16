@@ -2,28 +2,25 @@ import AppKit
 import AVKit
 import SwiftUI
 import Translation
-import Security
 import CoreText
 import WebKit
 
 public typealias Callback = @convention(c) (Int64, UnsafePointer<CChar>?) -> Void
+private var interfaceLanguage = "zh-CN"
+@_cdecl("hr_language") public func setLanguage(_ value: UnsafePointer<CChar>) { interfaceLanguage = String(cString: value) }
+private func localized(_ simplified: String, _ traditional: String, _ english: String, _ french: String) -> String {
+    switch interfaceLanguage { case "zh-TW": return traditional; case "en": return english; case "fr": return french; default: return simplified }
+}
 @_cdecl("hr_free") public func hrFree(_ p: UnsafeMutableRawPointer?) { free(p) }
-@_cdecl("hr_keychain_read") public func keychainRead(_ service: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>? {
-    let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: String(cString: service), kSecAttrAccount as String: "session", kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
-    var item: CFTypeRef?; guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess, let data = item as? Data, let value = String(data: data, encoding: .utf8) else { return nil }; return strdup(value)
-}
-@_cdecl("hr_keychain_write") public func keychainWrite(_ service: UnsafePointer<CChar>, _ value: UnsafePointer<CChar>?) -> Int32 {
-    let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: String(cString: service), kSecAttrAccount as String: "session"]
-    guard let value else { let status = SecItemDelete(q as CFDictionary); return status == errSecItemNotFound ? 0 : status }
-    let data = Data(String(cString: value).utf8)
-    let update = SecItemUpdate(q as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-    if update != errSecItemNotFound { return update }
-    var add = q; add[kSecValueData as String] = data; add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-    return SecItemAdd(add as CFDictionary, nil)
-}
 @_cdecl("hr_font_register") public func registerFont(_ path: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>? {
     let url = URL(fileURLWithPath: String(cString: path)); CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
     guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor], let first = descriptors.first, let name = CTFontDescriptorCopyAttribute(first, kCTFontFamilyNameAttribute) as? String else { return nil }; return strdup(name)
+}
+@_cdecl("hr_font_unregister") public func unregisterFont(_ path: UnsafePointer<CChar>) -> Int32 {
+    CTFontManagerUnregisterFontsForURL(URL(fileURLWithPath: String(cString: path)) as CFURL, .process, nil) ? 1 : 0
+}
+@_cdecl("hr_font_inspect") public func inspectFont(_ path: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>? {
+    guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(URL(fileURLWithPath: String(cString: path)) as CFURL) as? [CTFontDescriptor], let first = descriptors.first, let name = CTFontDescriptorCopyAttribute(first, kCTFontFamilyNameAttribute) as? String else { return nil }; return strdup(name)
 }
 @_cdecl("hr_accent") public func accent() -> UnsafeMutablePointer<CChar>? {
     guard let c = NSColor.controlAccentColor.usingColorSpace(.deviceRGB) else { return nil }
@@ -37,10 +34,11 @@ public typealias Callback = @convention(c) (Int64, UnsafePointer<CChar>?) -> Voi
     guard let p else { return }; let view = Unmanaged<AVPlayerView>.fromOpaque(p).takeRetainedValue(); view.player?.pause(); view.player?.replaceCurrentItem(with: nil); view.player = nil; view.removeFromSuperview()
 }
 @_cdecl("hr_share") public func share(_ value: UnsafePointer<CChar>) {
-    let text = String(cString: value); guard let parent = NSApp.keyWindow?.contentView else { return }
+    let text = String(cString: value); guard let parent = (NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first(where: { $0.isVisible }))?.contentView else { return }
     let item: Any = URL(string: text) ?? text as Any
-    NSSharingServicePicker(items: [item]).show(relativeTo: NSRect(x: parent.bounds.midX, y: parent.bounds.maxY - 50, width: 1, height: 1), of: parent, preferredEdge: .minY)
+    sharingPicker = NSSharingServicePicker(items: [item]); sharingPicker?.show(relativeTo: NSRect(x: parent.bounds.midX, y: parent.bounds.maxY - 50, width: 1, height: 1), of: parent, preferredEdge: .minY)
 }
+private var sharingPicker: NSSharingServicePicker?
 private var verificationWindows: [NSWindow] = []
 @_cdecl("hr_verify") public func verify(_ value: UnsafePointer<CChar>) {
     guard let url = URL(string: String(cString: value)), url.scheme == "https", let host = url.host, host == "www.xiaoheihe.cn" || host == "api.xiaoheihe.cn" else { return }
@@ -67,19 +65,25 @@ private struct TranslationView: View {
     var body: some View {
         VStack(spacing: 18) {
             Image(systemName: "character.bubble").font(.system(size: 32)).foregroundStyle(.blue)
-            Text("Apple 端侧翻译").font(.headline)
-            Text("首次使用可能需要下载语言资源。翻译在设备上完成。").multilineTextAlignment(.center)
-            ProgressView(); Button("取消") { job.finish(["error": "翻译已取消"]) }
-        }.padding(28).frame(width: 390, height: 240)
-        .onAppear { configuration = TranslationSession.Configuration(source: Locale.Language(identifier: "en"), target: Locale.Language(identifier: target)) }
+            Text(localized("Apple 端侧翻译", "Apple 裝置端翻譯", "Apple on-device translation", "Traduction Apple sur l’appareil")).font(.headline)
+            Text(localized("首次使用可能需要下载语言资源。翻译在设备上完成。", "首次使用可能需要下載語言資源。翻譯在裝置上完成。", "Language resources may be downloaded on first use. Translation runs on your Mac.", "Des ressources linguistiques peuvent être téléchargées à la première utilisation. La traduction s’effectue sur votre Mac.")).multilineTextAlignment(.center)
+            ProgressView(); Button(localized("取消", "取消", "Cancel", "Annuler")) { job.finish(["error": "翻译已取消"]) }
+        }.padding(28).frame(width: 420, height: 340)
+        .onAppear { configuration = TranslationSession.Configuration(source: nil, target: Locale.Language(identifier: target)) }
         .translationTask(configuration) { session in
             do {
-                try await session.prepareTranslation()
+                // With automatic source detection, the batch supplies the sample text.
+                // prepareTranslation() has no text and rejects a nil source language.
                 let responses = try await session.translations(from: strings.enumerated().map { .init(sourceText: $0.element, clientIdentifier: String($0.offset)) })
                 var output = Array(repeating: "", count: strings.count)
                 for response in responses { if let id = response.clientIdentifier, let i = Int(id), output.indices.contains(i) { output[i] = response.targetText } }
                 job.finish(["text": output])
-            } catch { job.finish(["error": error.localizedDescription]) }
+            } catch {
+                let failure = error as NSError
+                if error is CancellationError || failure.code == NSUserCancelledError { job.finish(["error": "翻译已取消"]) }
+                else if TranslationError.unsupportedLanguagePairing ~= error { job.finish(["error": "原文与目标语言相同或不支持此语言组合"]) }
+                else { job.finish(["error": [error.localizedDescription, failure.localizedFailureReason].compactMap { $0 }.joined(separator: " · ")]) }
+            }
         }
     }
 }
@@ -87,7 +91,7 @@ private struct TranslationView: View {
     guard #available(macOS 15.0, *) else { "{\"error\":\"需要 macOS 15 或更新版本\"}".withCString { callback(id, $0) }; return }
     guard let data = String(cString: input).data(using: .utf8), let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let strings = json["text"] as? [String] else { return }
     let job = TranslationJob(id, callback); jobs[id] = job
-    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 390, height: 240), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 340), styleMask: [.titled, .closable], backing: .buffered, defer: false)
     job.window = window; window.delegate = job; window.isReleasedWhenClosed = false; window.title = "盒阅 · 翻译"; window.contentView = NSHostingView(rootView: TranslationView(job: job, strings: strings, target: json["target"] as? String ?? "zh-Hans")); window.center(); window.makeKeyAndOrderFront(nil)
 }
 @_cdecl("hr_translate_cancel") public func cancelTranslation(_ id: Int64) { jobs[id]?.finish(["error": "翻译已取消"]) }

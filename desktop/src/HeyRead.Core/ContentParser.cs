@@ -23,7 +23,7 @@ public static class ContentParser
         var published = row.L("create_at"); var date = row.S("create_str", "date");
         if (date.Length == 0 && published > 0) date = DateTimeOffset.FromUnixTimeSeconds(published).ToLocalTime().ToString("yyyy-MM-dd");
         var author = profile?.Name; if (string.IsNullOrEmpty(author)) author = row.TextValue("username");
-        return new(id, Source.HEYBOX, title, body[..Math.Min(160, body.Length)], body, author ?? "", date, image, J.Https(row.S("share_url")) ?? $"https://www.xiaoheihe.cn/app/bbs/link/{Uri.EscapeDataString(id)}", PublishedAt: published, HSrc: row.S("h_src"), Profile: profile, Sections: Labels(row["topics"], "topic_id"), Topics: Labels(row["hashtags"], "hashtag_id"));
+        return new(id, Source.HEYBOX, title, body[..Math.Min(160, body.Length)], body, author ?? "", date, image, J.Https(row.S("share_url")) ?? $"https://www.xiaoheihe.cn/app/bbs/link/{Uri.EscapeDataString(id)}", PublishedAt: published, HSrc: row.S("h_src"), Profile: profile, Sections: Labels(row["topics"], "topic_id"), Topics: Labels(row["hashtags"], "hashtag_id"), CommentCount: (row["stats"]).OptionalInt("comment_num") ?? row.OptionalInt("comment_num"), FeedVideo: PublicVideo(row));
     }
     public static Author? Profile(JsonNode? user, string? location = null) => user is JsonObject ? new(user.S("userid", "user_id", "heybox_id", "userId"), user.TextValue("username", "nickname", "display_name"), user.FirstHttps("avatar", "avartar", "avatar_url"), location) : null;
     public static IReadOnlyList<Label> Labels(JsonNode? array, string idKey) => array is JsonArray a ? a.Where(x => x.S("name").Length > 0).Select(x => new Label(x.S(idKey, "id"), x.S("name"))).DistinctBy(x => x.Id.Length > 0 ? x.Id : x.Name).ToArray() : [];
@@ -42,21 +42,21 @@ public static class ContentParser
         {
             var type = row.S("type", "block_type", "content_type").ToLowerInvariant();
             var text = row.S("text", "html", "content", "value");
-            var url = J.Https(row.S("data-original", "original_url", "origin_url", "url", "src", "image_url", "img_url"));
+            var url = row.FirstHttps("data-original", "original_url", "origin_url", "url", "src", "image_url", "img_url");
             switch (type)
             {
                 case "event_entry": break;
                 case "image":
                 case "img":
-                    url ??= J.Https(row?["data"].S("url", "src"));
-                    result.Add(new(url == null ? BlockKind.Notice : BlockKind.Image, url == null ? "图片暂不可用" : "", url, row.S("caption", "desc", "description"))); break;
+                    url ??= row?["data"].FirstHttps("url", "src");
+                    result.Add(new(url == null ? BlockKind.Notice : BlockKind.Image, url == null ? "图片暂不可用" : "", url, row.S("caption", "desc", "description"), Width: row.OptionalInt("width"), Height: row.OptionalInt("height"))); break;
                 case "quote": case "blockquote": result.Add(new(BlockKind.Quote, Children: row?["content"] is JsonArray ? Blocks(row["content"], depth + 1) : Html(text))); break;
                 case "game":
                 case "game_card":
                     var game = row?["app_info"] ?? row?["game_info"] ?? row?["game"] ?? row?["data"] ?? row; var app = game.I("steam_appid", game.I("appid", game.I("app_id", row.I("gameid"))));
                     result.Add(new(BlockKind.Game, game.S("name", "game_name", "title"), J.Https(game.S("url")), AppId: app > 0 ? app : null)); break;
                 case "video":
-                    var video = row?["video_info"] ?? row?["video"] ?? row?["data"] ?? row; var direct = J.Https(video.S("video_url", "play_url", "url", "src", "mp4"));
+                    var video = row?["video_info"] ?? row?["video"] ?? row?["data"] ?? row; var direct = video.FirstHttps("video_url", "play_url", "url", "src", "mp4");
                     result.Add(new(direct == null ? BlockKind.Notice : BlockKind.Video, direct == null ? "视频暂不可用，请打开原文" : video.S("title"), direct, J.Https(video.S("cover", "poster")))); break;
                 default: result.AddRange(Blocks(JsonValue.Create(text), depth + 1)); break;
             }
@@ -76,13 +76,21 @@ public static class ContentParser
         if (node is not IElement el) return;
         var tag = el.TagName.ToLowerInvariant();
         if (tag is "script" or "style" or "noscript") return;
-        if (tag == "img") { var url = J.Https(el.GetAttribute("data-original") ?? el.GetAttribute("src") ?? el.GetAttribute("data-src")); if (url != null) result.Add(new(BlockKind.Image, Url: url, Caption: el.GetAttribute("alt"))); return; }
+        if (int.TryParse(el.GetAttribute("data-gameid") ?? el.GetAttribute("data-appid"), out var gameId) && gameId > 0) { result.Add(new(BlockKind.Game, AppId: gameId)); return; }
+        if (tag == "img") { var url = ImageUrl(el); if (url != null) result.Add(new(BlockKind.Image, Url: url, Caption: el.GetAttribute("alt"))); return; }
         if (tag == "video") { var url = J.Https(el.GetAttribute("src") ?? el.QuerySelector("source")?.GetAttribute("src")); result.Add(new(url == null ? BlockKind.Notice : BlockKind.Video, "视频", url, el.GetAttribute("poster"))); return; }
         if (tag == "iframe") { result.Add(new(BlockKind.ExternalVideo, "在原网页播放视频", J.Https(el.GetAttribute("src")))); return; }
         if (tag == "blockquote") { var children = new List<ArticleBlock>(); foreach (var child in el.ChildNodes) Walk(child, children, depth + 1); result.Add(new(BlockKind.Quote, Children: children)); return; }
         if (tag is "h1" or "h2" or "h3" or "h4") { result.Add(new(BlockKind.Heading, el.TextContent.Trim(), Level: tag[1] - '0', Runs: Inline(el))); return; }
-        if (tag == "li") { result.Add(new(BlockKind.ListItem, el.TextContent.Trim(), Level: depth)); return; }
-        if (tag is "p" or "div" && el.QuerySelector("img,video,iframe,p,div,blockquote,ul,ol,h1,h2,h3,h4") == null) { if (!string.IsNullOrWhiteSpace(el.TextContent)) result.Add(new(BlockKind.Paragraph, el.TextContent.Trim(), Runs: Inline(el))); return; }
+        if (tag == "li")
+        {
+            var runs = el.ChildNodes.Where(n => n is not IElement child || child.TagName is not ("UL" or "OL")).SelectMany(n => Inline(n)).ToArray();
+            var ordered = el.ParentElement?.TagName == "OL"; var start = int.TryParse(el.ParentElement?.GetAttribute("start"), out var value) ? value : 1;
+            var index = el.ParentElement?.Children.Where(c => c.TagName == "LI").TakeWhile(c => c != el).Count() ?? 0;
+            result.Add(new(BlockKind.ListItem, string.Concat(runs.Select(r => r.Text)).Trim(), Level: el.Ancestors().OfType<IElement>().Count(a => a.TagName is "UL" or "OL"), Runs: runs, ListMarker: ordered ? (start + index) + "." : "•"));
+            foreach (var child in el.Children.Where(c => c.TagName is "UL" or "OL")) Walk(child, result, depth + 1); return;
+        }
+        if (tag is "p" or "div" && el.QuerySelector("video,iframe,p,div,blockquote,ul,ol,h1,h2,h3,h4") == null && el.QuerySelectorAll("img").All(IsEmoji)) { if (!string.IsNullOrWhiteSpace(el.TextContent) || el.QuerySelectorAll("img").Any(IsEmoji)) result.Add(new(BlockKind.Paragraph, el.TextContent.Trim(), Runs: Inline(el))); return; }
         foreach (var child in el.ChildNodes) Walk(child, result, depth + 1);
     }
     public static IReadOnlyList<RichRun> Inline(INode node, bool bold = false, bool italic = false, string? url = null, bool code = false, int depth = 0)
@@ -90,11 +98,24 @@ public static class ContentParser
         if (depth > 16) return [];
         if (node is IText text) return [new(text.Data, bold, italic, url, code)];
         if (node is not IElement el) return [];
-        var tag = el.TagName.ToLowerInvariant(); if (tag == "br") return [new("\n")];
+        var tag = el.TagName.ToLowerInvariant(); if (tag == "img" && IsEmoji(el)) return [new(el.GetAttribute("alt") ?? "", ImageUrl: ImageUrl(el))]; if (tag == "br") return [new("\n")];
         if (tag is "script" or "style") return [];
         bold |= tag is "b" or "strong"; italic |= tag is "i" or "em"; code |= tag == "code";
         if (tag == "a") url = J.Https(el.GetAttribute("href"));
         return el.ChildNodes.SelectMany(x => Inline(x, bold, italic, url, code, depth + 1)).Take(2048).ToArray();
+    }
+    private static string? ImageUrl(IElement el) => new[] { el.GetAttribute("data-original"), el.GetAttribute("src"), el.GetAttribute("data-src") }.Select(J.Https).FirstOrDefault(x => x != null);
+    private static bool IsEmoji(IElement el) => el.ClassList.Any(x => x.Contains("emoji", StringComparison.OrdinalIgnoreCase)) || (ImageUrl(el)?.Contains("/heybox/emoji/", StringComparison.OrdinalIgnoreCase) ?? false);
+    private static string FormatTime(long seconds) { try { return seconds > 0 ? DateTimeOffset.FromUnixTimeSeconds(seconds).ToLocalTime().ToString("yyyy-MM-dd HH:mm") : ""; } catch (ArgumentOutOfRangeException) { return ""; } }
+    public static ArticleBlock? PublicVideo(JsonNode? node)
+    {
+        if (node is not JsonObject) return null;
+        var info = node["video_info"] ?? node["video"];
+        if (info == null && node.I("has_video") != 1 && node.FirstHttps("video_url") == null) return null;
+        info ??= node;
+        var direct = node.FirstHttps("video_url") ?? info.FirstHttps("video_url", "url", "play_url", "src");
+        if (direct == null && node.I("has_video") != 1) return null;
+        return new(direct == null ? BlockKind.Notice : BlockKind.Video, direct == null ? "视频暂不可用，请打开原文" : info.S("title", "name"), direct, node.FirstHttps("video_thumb") ?? info.FirstHttps("thumb", "video_thumb", "thumbnail", "poster"), Width: info.OptionalInt("width"), Height: info.OptionalInt("height"));
     }
     public static IReadOnlyList<Comment> Comments(JsonArray? rows, string? root = null)
     {
@@ -112,8 +133,8 @@ public static class ContentParser
             if (id.Length == 0) { if (row["comments"] is JsonArray nested) result.AddRange(Comments(nested, root)); continue; }
             var text = Text(c.S("text", "content", "comment"));
             var replies = Comments(row.Array("sub_comments", "subcomments", "replies", "child_comments"), root ?? id);
-            var images = c.Array("imgs", "images")?.Select(x => J.Https(x is JsonValue ? x.ToString() : x.S("url", "src"))).OfType<string>().ToArray() ?? [];
-            result.Add(new(id, root ?? (c.S("root_id", "root_comment_id") is { Length: > 0 } r ? r : id), text, Profile(c["user"] ?? c["user_info"]) ?? new(), c.S("create_str", "date"), c.I("comment_award_num", c.I("award_num", c.I("up", c.I("support_num")))), c.S("is_support") is "1" or "true", replies, images));
+            var images = c.Array("imgs", "images")?.Select(x => x is JsonValue ? J.Https(x.ToString()) : x.FirstHttps("url", "src")).OfType<string>().ToArray() ?? [];
+            result.Add(new(id, root ?? (c.S("root_id", "root_comment_id") is { Length: > 0 } r ? r : id), text, Profile(c["user"] ?? c["user_info"]) ?? new(), c.S("create_str", "date") is { Length: > 0 } displayDate ? displayDate : FormatTime(c.L("create_at")), c.I("comment_award_num", c.I("award_num", c.I("up", c.I("support_num")))), c.S("is_support") is "1" or "true", replies, images));
         }
         return result;
     }

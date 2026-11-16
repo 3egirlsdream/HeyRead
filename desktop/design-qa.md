@@ -1,0 +1,19 @@
+# A visual matching — 0.2 review
+
+Reference: A/light and A/dark discovery 01 and reading 11. Original rasters are 1586×992; compare at a 1280×800 logical canvas. Native traffic lights and the capture indicator are OS-owned.
+
+## Implemented and checked
+
+- Sidebar 210, command bar 68, footer 64; expanding search and outlined navigation/refresh/layout actions.
+- Discovery list 432, reading list 335; draggable 280–480. Covers 100×68 / 94×68 with 16 / 12 gap, rounded selected rows and inset separators.
+- Reader title 26, avatar 36, follow action, hero 260 / 218, selectable rich text, native media, real game metadata and fixed bottom actions.
+- Same sample titles, article and artwork used for comparison. Only artwork regions are read from reference files in the opt-in fixture; UI is built from actual controls.
+- Light/dark switching, active-state contrast, 900×640 list/detail navigation, English settings, font import/remove, native share and window reopening checked in an isolated app.
+- Data-driven comments, replies, translation, blocked-content, retry, empty, loading and authentication states share the same components. Loading rows use skeletons; blocked navigation does not fetch hidden content until explicit reveal.
+
+## Remaining visual differences
+
+- P2: generated Chinese glyph widths are inconsistent between the two reference pages. Real PingFang text wraps differently; the wide reading page places the quote further below the fold. Readable font metrics and user typography preferences are preserved.
+- P3: Fluent book/chat/list icons replace the generated icon shapes; macOS supplies traffic lights, system sheets, native media and sharing.
+
+Structure and component alignment have been reviewed. Pixel-for-pixel identity has **not** passed acceptance. The task's `outputs/heyread-macos-0.2/index.html` provides reference/actual comparison, rather than asserting an unsupported pixel match.

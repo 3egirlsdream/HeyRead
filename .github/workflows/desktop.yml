@@ -12,7 +12,7 @@ permissions:
   contents: read
 jobs:
   desktop-tests:
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: desktop
@@ -21,8 +21,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: desktop/global.json
-      - name: Build native bridge
-        run: ./scripts/build-native.sh
       - name: Restore locked dependencies
         run: dotnet restore HeyRead.slnx --locked-mode
       - name: Test desktop protocols and UI
@@ -34,7 +32,7 @@ jobs:
           path: desktop/TestResults
   package:
     needs: desktop-tests
-    runs-on: macos-15
+    runs-on: macos-15-intel
     strategy:
       matrix:
         rid: [osx-arm64, osx-x64]
@@ -47,6 +45,9 @@ jobs:
         with:
           global-json-file: desktop/global.json
       - run: ./scripts/package-macos.sh '${{ matrix.rid }}'
+      - name: Start the Intel self-contained runtime
+        if: matrix.rid == 'osx-x64'
+        run: ./artifacts/osx-x64/HeyRead.app/Contents/MacOS/HeyRead --version
       - uses: actions/upload-artifact@v4
         with:
           name: HeyRead-${{ matrix.rid }}

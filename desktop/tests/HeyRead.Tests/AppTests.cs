@@ -25,7 +25,7 @@ public sealed class AppTests
     {
         var root = Path.Combine(Path.GetTempPath(), "heyread-test-" + Guid.NewGuid()); var store = new LibraryStore(root); store.Preferences.NoImages = true;
         using var api = new HeyReadApi(new FakeHandler("{\"status\":\"ok\",\"result\":{\"links\":[]}}"));
-        using var vm = new MainViewModel(api, new(api), store, new MacSessionStore(true), new NoTranslation());
+        using var vm = new MainViewModel(api, new(api), store, new MemorySessionStore(), new NoTranslation());
         var window = new MainWindow(vm); window.Show();
         await vm.NavigateAsync("discover");
         vm.Stories.Add(DemoStories.Items[0]); window.Measure(new(1280, 800)); window.Arrange(new(0, 0, 1280, 800));
@@ -58,3 +58,5 @@ public sealed class AppTests
     }
     private sealed class NoTranslation : ITranslationService { public Task<string[]> TranslateAsync(string[] text, string target, CancellationToken ct) => Task.FromResult(text); }
 }
+
+public sealed class MemorySessionStore : ISessionStore { private Session? _session; public Session? Load() => _session; public void Save(Session? session) => _session = session; }

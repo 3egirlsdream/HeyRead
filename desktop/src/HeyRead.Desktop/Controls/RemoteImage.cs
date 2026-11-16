@@ -41,15 +41,21 @@ public sealed class ImageService(string cacheRoot, HttpMessageHandler? handler =
         using var stream = File.OpenRead(path);
         return height > width ? Bitmap.DecodeToHeight(stream, Math.Min(height, maxSide)) : Bitmap.DecodeToWidth(stream, Math.Min(width, maxSide));
     }
+    public static string Extension(string path)
+    {
+        using var input = File.OpenRead(path); using var codec = SkiaSharp.SKCodec.Create(input);
+        return codec?.EncodedFormat switch { SkiaSharp.SKEncodedImageFormat.Png => ".png", SkiaSharp.SKEncodedImageFormat.Gif => ".gif", SkiaSharp.SKEncodedImageFormat.Webp => ".webp", SkiaSharp.SKEncodedImageFormat.Bmp => ".bmp", SkiaSharp.SKEncodedImageFormat.Ico => ".ico", _ => ".jpg" };
+    }
     public void Dispose() { _http.Dispose(); _slots.Dispose(); }
 }
 public sealed class RemoteImage : Border
 {
     private readonly ImageService _service; private readonly string? _url; private readonly Image _image = new() { Stretch = Stretch.UniformToFill }; private CancellationTokenSource? _cts; private Bitmap? _bitmap;
+    public bool PreserveAspectRatio { get; set; }
     public bool IsImageLoaded => _bitmap != null || Child is NativeGif;
     public RemoteImage(ImageService service, string? url, double height = 64)
     {
-        _service = service; _url = url; Height = height; CornerRadius = new(8); ClipToBounds = true; Ui.Brush(this, BackgroundProperty, "Subtle"); Child = _image;
+        _service = service; _url = url; Height = height; CornerRadius = new(8); ClipToBounds = true; SizeChanged += (_, _) => UpdateAspect(); Ui.Brush(this, BackgroundProperty, "Subtle"); Child = _image;
     }
     protected override async void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -58,9 +64,15 @@ public sealed class RemoteImage : Border
         {
             var path = await _service.FetchAsync(_url, token); if (OperatingSystem.IsMacOS()) { var header = new byte[6]; using (var file = File.OpenRead(path)) _ = file.Read(header); if (Encoding.ASCII.GetString(header).StartsWith("GIF8")) { if (!token.IsCancellationRequested) Child = new NativeGif(path); return; } }
             var decodeWidth = Height <= 100 ? 240 : 1600;
-            var bitmap = await Task.Run(() => { return ImageService.Decode(path, decodeWidth); }, token); if (token.IsCancellationRequested) bitmap.Dispose(); else { _bitmap = bitmap; _image.Source = bitmap; }
+            var bitmap = await Task.Run(() => { return ImageService.Decode(path, decodeWidth); }, token); if (token.IsCancellationRequested) bitmap.Dispose(); else { _bitmap = bitmap; _image.Source = bitmap; UpdateAspect(); }
         }
         catch (Exception error) when (error is not OutOfMemoryException) { if (!token.IsCancellationRequested) Child = Ui.Text("图片暂不可用", 12, muted: true); }
+    }
+    private void UpdateAspect()
+    {
+        if (!PreserveAspectRatio || _bitmap == null || Bounds.Width <= 0 || _bitmap.PixelSize.Width <= 0) return;
+        _image.Stretch = Stretch.Uniform; var height = Bounds.Width * _bitmap.PixelSize.Height / _bitmap.PixelSize.Width;
+        if (double.IsFinite(height) && Math.Abs(Height - height) > .5) Height = height;
     }
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e) { _cts?.Cancel(); _cts?.Dispose(); _cts = null; _image.Source = null; _bitmap?.Dispose(); _bitmap = null; base.OnDetachedFromVisualTree(e); }
 }

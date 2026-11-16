@@ -9,10 +9,11 @@ public sealed class HeyReadApi : IDisposable
     private readonly HttpClient _public;
     private readonly HttpClient _account;
     private readonly CookieContainer _cookies = new();
+    private readonly object _sessionLock = new();
     private Session? _session;
     private int _sessionVersion;
     public Func<CaptchaChallenge, CancellationToken, Task<CaptchaProof>>? VerifyCaptcha { get; set; }
-    public Session? Session => _session;
+    public Session? Session { get { lock (_sessionLock) return _session; } }
     public Func<string> Gateway { get; set; } = () => "https://api.xiaoheihe.cn";
     public HeyReadApi(HttpMessageHandler? publicHandler = null, HttpMessageHandler? accountHandler = null)
     {
@@ -20,7 +21,7 @@ public sealed class HeyReadApi : IDisposable
         _account = new(accountHandler ?? new HttpClientHandler { UseCookies = false, AllowAutoRedirect = false });
         _public.Timeout = _account.Timeout = TimeSpan.FromSeconds(20);
     }
-    public void SetSession(Session? session) { _session = session is { IsValid: true } ? session : null; Interlocked.Increment(ref _sessionVersion); foreach (Cookie c in _cookies.GetCookies(new Uri("https://" + OfficialHost))) c.Expired = true; }
+    public void SetSession(Session? session) { lock (_sessionLock) { _session = session is { IsValid: true } ? session : null; _sessionVersion++; foreach (Cookie c in _cookies.GetCookies(new Uri("https://" + OfficialHost))) c.Expired = true; } }
     public static Uri SignedUri(string origin, string path, IReadOnlyDictionary<string, string>? parameters = null, string? accountId = null)
     {
         if (!Uri.TryCreate(origin, UriKind.Absolute, out var baseUri) || baseUri.Scheme != "https" || !string.IsNullOrEmpty(baseUri.UserInfo) || baseUri.AbsolutePath != "/" || baseUri.Query.Length != 0) throw new ArgumentException("数据来源必须是有效的 HTTPS 站点");
@@ -35,7 +36,7 @@ public sealed class HeyReadApi : IDisposable
     public async Task<JsonObject> RequestAsync(string path, Dictionary<string, string>? parameters = null, bool account = false, Dictionary<string, string>? form = null, bool login = true, CancellationToken ct = default)
     {
         parameters = parameters == null ? null : new(parameters);
-        var session = _session; var version = _sessionVersion;
+        Session? session; int version; lock (_sessionLock) { session = _session; version = _sessionVersion; }
         if (account && login && session == null) throw new ApiException("请先登录小黑盒账号", "login");
         var uri = SignedUri(account ? "https://" + OfficialHost : Gateway(), path, parameters, account && login ? session?.UserId : null);
         using var request = new HttpRequestMessage(form == null ? HttpMethod.Get : HttpMethod.Post, uri);
@@ -55,6 +56,7 @@ public sealed class HeyReadApi : IDisposable
         if (account && version != _sessionVersion) throw new OperationCanceledException("账号已变化", ct);
         if (account && !login && response.Headers.TryGetValues("Set-Cookie", out var values)) foreach (var value in values) { try { _cookies.SetCookies(uri, value); } catch (CookieException) { } }
         var raw = await ReadLimitedAsync(response, 8 * 1024 * 1024, ct).ConfigureAwait(false);
+        if (account && version != Volatile.Read(ref _sessionVersion)) throw new OperationCanceledException("账号已变化", ct);
         var root = JsonNode.Parse(raw) as JsonObject ?? throw new ApiException("响应格式无效");
         var status = root.S("status").ToLowerInvariant();
         if (status == "show_captcha" && !account && form == null && VerifyCaptcha != null && parameters?.ContainsKey("captcha_type") != true)
@@ -109,7 +111,7 @@ public sealed class HeyReadApi : IDisposable
     public async Task<Article> ArticleAsync(Story story, CancellationToken ct = default)
     {
         if (story.Source != Source.HEYBOX) return new(story with { Blocks = story.Blocks ?? ContentParser.Html(story.Body) }, []);
-        var account = _session != null; JsonNode? tree = null; JsonNode? web = null; Exception? treeError = null;
+        var account = Session != null; JsonNode? tree = null; JsonNode? web = null; Exception? treeError = null;
         try { tree = await RequestAsync(account ? "/bbs/app/link/tree/v2" : "/bbs/app/link/tree", TreeParameters(story, 1), account, ct: ct); }
         catch (Exception e) when (e is not OperationCanceledException && e is not ApiException { Status: "relogin" }) { treeError = e; }
         try { web = await RequestAsync("/bbs/app/link/web/view", new() { ["link_id"] = story.Id, ["return_json"] = "1", ["in_topic"] = "1" }, account, ct: ct); }
@@ -118,9 +120,11 @@ public sealed class HeyReadApi : IDisposable
         var blocks = ContentParser.Blocks(webLink?["content"]);
         if (blocks.Count == 0) blocks = ContentParser.Blocks(body?["content"] ?? link?["content"]);
         if (blocks.Count == 0) blocks = ContentParser.Html(body.S("text", "description", "content").Length > 0 ? body.S("text", "description", "content") : story.Body);
+        var video = ContentParser.PublicVideo(webLink) ?? ContentParser.PublicVideo(link) ?? ContentParser.PublicVideo(body) ?? story.FeedVideo;
+        if (video != null && !blocks.Any(b => b.Kind == BlockKind.Video && b.Url == video.Url)) blocks = blocks.Concat([video]).ToArray();
         var profile = ContentParser.Profile(body?["user"] ?? webLink?["poster"]) ?? story.Profile;
         var stats = link?["stats"]; var comments = tree?["result"]?["comment"];
-        return new(story with { Blocks = blocks, Profile = profile, Author = profile?.Name ?? story.Author, Sections = ContentParser.Labels(webLink?["topics"], "topic_id").Count > 0 ? ContentParser.Labels(webLink?["topics"], "topic_id") : story.Sections, Topics = ContentParser.Labels(webLink?["hashtags"], "hashtag_id").Count > 0 ? ContentParser.Labels(webLink?["hashtags"], "hashtag_id") : story.Topics, Notice = link.I("view_limit") == 1 ? "当前显示公开内容，更多内容可打开原文查看" : webLink == null ? "暂未获取完整正文，当前显示可用内容" : null }, ContentParser.Comments(comments.Array("comments")), comments?["comment_config"].B("has_more_floors") ?? false, link.S("auth_code") is { Length: > 0 } auth ? auth : tree?["result"].S("auth_code"), stats.B("is_award_link") ?? stats.B("is_award"), stats.B("is_favour"), (stats.S("follow_status") is "1" or "3" ? true : stats.S("follow_status") is "0" or "2" ? false : null));
+        return new(story with { Blocks = blocks, Profile = profile, Author = profile?.Name ?? story.Author, Sections = ContentParser.Labels(webLink?["topics"], "topic_id").Count > 0 ? ContentParser.Labels(webLink?["topics"], "topic_id") : story.Sections, Topics = ContentParser.Labels(webLink?["hashtags"], "hashtag_id").Count > 0 ? ContentParser.Labels(webLink?["hashtags"], "hashtag_id") : story.Topics, Notice = link.I("view_limit") == 1 ? "当前显示公开内容，更多内容可打开原文查看" : webLink == null ? "暂未获取完整正文，当前显示可用内容" : null }, ContentParser.Comments(comments.Array("comments")), comments?["comment_config"].B("has_more_floors") ?? comments.Array("comments")?.Count >= 20, link.S("auth_code") is { Length: > 0 } auth ? auth : tree?["result"].S("auth_code"), stats.B("is_award_link") ?? stats.B("is_award"), stats.B("is_favour"), (stats.S("follow_status") is "1" or "3" ? true : stats.S("follow_status") is "0" or "2" ? false : null), LikeCount: stats.OptionalInt("link_award_num", "award_num", "like_num"), CommentCount: stats.OptionalInt("comment_num") ?? link.OptionalInt("comment_num"), CommentsError: account && comments.Array("comments") == null ? "评论暂不可用，请重试" : null);
     }
     private static Dictionary<string, string> TreeParameters(Story story, int page) { var p = new Dictionary<string, string> { ["link_id"] = story.Id, ["page"] = page.ToString(), ["limit"] = "20", ["is_first"] = page == 1 ? "1" : "0", ["sort_filter"] = "hot", ["owner_only"] = "0", ["hide_cy"] = "0", ["check_commented"] = "0", ["dw"] = "304" }; if (!string.IsNullOrEmpty(story.HSrc)) p["h_src"] = story.HSrc; return p; }
     public async Task<Page<Comment>> CommentsAsync(Story story, int page, string? rootId = null, string? cursor = null, CancellationToken ct = default)

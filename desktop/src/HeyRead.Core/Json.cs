@@ -10,6 +10,7 @@ public static class J
     }
     public static string TextValue(this JsonNode? n, params string[] keys) { foreach (var key in keys) if (n is JsonObject o && o[key] is JsonValue v && v.TryGetValue<string>(out var value) && !string.IsNullOrWhiteSpace(value) && value.Trim() is not "null" and not "undefined") return value.Trim(); return ""; }
     public static string? FirstHttps(this JsonNode? n, params string[] keys) => keys.Select(k => Https(n.S(k))).FirstOrDefault(x => x != null);
+    public static int? OptionalInt(this JsonNode? n, params string[] keys) { foreach (var key in keys) if (int.TryParse(n.S(key), out var count) && count >= 0) return count; return null; }
     public static int I(this JsonNode? n, string key, int fallback = 0) => int.TryParse(n.S(key), out var i) ? i : fallback;
     public static long L(this JsonNode? n, string key) => long.TryParse(n.S(key), out var i) ? i : 0;
     public static bool? B(this JsonNode? n, string key) => n.S(key).ToLowerInvariant() switch { "true" or "1" or "yes" => true, "false" or "0" or "no" => false, _ => null };

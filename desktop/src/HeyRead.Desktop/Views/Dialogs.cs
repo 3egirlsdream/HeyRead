@@ -15,15 +15,15 @@ namespace HeyRead.Desktop.Views;
 
 public sealed partial class MainWindow
 {
-    private Window Dialog(string title, double width, double height) => new() { Title = title, Width = width, Height = height, MinWidth = Math.Min(340, width), MinHeight = Math.Min(220, height), WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Background, FontFamily = FontFamily };
+    private Window Dialog(string title, double width, double height) => new() { Title = T(title), Width = width, Height = height, MinWidth = Math.Min(340, width), MinHeight = Math.Min(220, height), WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Background, FontFamily = FontFamily };
     private async Task ShowDialogContent(string title, Control content, double width = 480, double height = 360)
     {
         var window = Dialog(title, width, height); var close = Button(T("关闭"), window.Close); var layout = new Grid { RowDefinitions = new("*,Auto"), Margin = new(24) }; layout.Children.Add(new ScrollViewer { Content = content }); Grid.SetRow(close, 1); close.HorizontalAlignment = HorizontalAlignment.Right; close.Margin = new(0, 16, 0, 0); layout.Children.Add(close); window.Content = layout; await window.ShowDialog(this);
     }
-    private Task Notice(string message) => ShowDialogContent("盒阅", Text(message), 460, 240);
+    private Task Notice(string message) => ShowDialogContent("盒阅", Text(T(message)), 460, 240);
     private async Task<bool> Confirm(string title, string description)
     {
-        var window = Dialog(title, 420, 220); var yes = Button(T("确认"), () => window.Close(true), "primary"); var no = Button(T("取消"), () => window.Close(false)); window.Content = Stack(24, Text(title, 18, true), Text(description), Row(8, no, yes)); ((Control)window.Content).Margin = new(24); return await window.ShowDialog<bool>(this);
+        var window = Dialog(title, 420, 220); var yes = Button(T("确认"), () => window.Close(true), "primary"); var no = Button(T("取消"), () => window.Close(false)); window.Content = Stack(24, Text(T(title), 18, true), Text(T(description)), Row(8, no, yes)); ((Control)window.Content).Margin = new(24); return await window.ShowDialog<bool>(this);
     }
     private async Task LoginDialog()
     {
@@ -49,12 +49,12 @@ public sealed partial class MainWindow
                         case "ready": state.Text = T("已扫描，请在手机上确认"); break;
                         case "expired": state.Text = T("二维码已过期，请重新获取"); image.Opacity = 0.25; return;
                         case "cancelled": state.Text = T("登录已取消，请重新获取"); return;
-                        case "loggedin" when result.Session != null: _vm.Login(result.Session); window.Close(); Render(); return;
+                        case "loggedin" when result.Session != null: var story = _vm.Article?.Story; _vm.Login(result.Session); state.Text = T("正在加载…"); await _vm.LoadAsync(); if (story != null) await _vm.SelectAsync(story); window.Close(); Render(); return;
                     }
                 }
             }
             catch (OperationCanceledException) { }
-            catch (Exception e) { if (!token.IsCancellationRequested) state.Text = "获取失败：" + e.Message; }
+            catch (Exception e) { if (!token.IsCancellationRequested) state.Text = T("获取失败：") + T(e.Message); }
             finally { if (!token.IsCancellationRequested) refresh.IsEnabled = true; }
         }
         refresh.Click += async (_, _) => { image.Opacity = 1; await Start(); };
@@ -65,15 +65,17 @@ public sealed partial class MainWindow
     {
         if (_vm.Api.Session == null) { await LoginDialog(); if (_vm.Api.Session == null) return; }
         var snapshot = _vm.Article; if (snapshot == null) return;
-        var key = snapshot.Story.Key + ":" + (reply?.Id ?? "root");
+        var expectedAccount = _vm.Api.Session?.UserId;
+        var key = expectedAccount + ":" + snapshot.Story.Key + ":" + (reply?.Id ?? "root");
         var window = Dialog(reply == null ? T("写评论") : T("回复") + " " + reply.Author.Name, 540, 340);
         var editor = new TextBox { Text = _vm.Store.Drafts.GetValueOrDefault(key, ""), AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 150, MaxLength = 10000, PlaceholderText = T("写下你的想法…") };
         var error = Text(T("草稿自动保存在本机"), 12, muted: true);
         var send = AsyncButton(T("发送"), async () =>
         {
             var draft = editor.Text ?? ""; _vm.Store.SetDraft(key, draft);
-            try { await _vm.Api.SocialAsync(snapshot.Story, "comment", true, draft, snapshot.AuthCode, reply); _vm.Store.SetDraft(key, ""); editor.Text = ""; window.Close(); _vm.Toast = "发送成功"; await _vm.RetryDetailAsync(); }
-            catch (Exception e) { error.Text = "发送失败，草稿已保留：" + e.Message; }
+            if (_vm.Api.Session?.UserId != expectedAccount) { error.Text = T("账号已变化，请重新打开评论编辑器"); return; }
+            try { await _vm.Api.SocialAsync(snapshot.Story, "comment", true, draft, snapshot.AuthCode, reply); _vm.Store.SetDraft(key, ""); editor.Text = ""; window.Close(); _vm.Toast = "发送成功"; if (_vm.Article?.Story.Key == snapshot.Story.Key) await _vm.RetryDetailAsync(); }
+            catch (Exception e) { error.Text = T("发送失败，草稿已保留：") + T(e.Message); }
         }, "primary");
         var draftTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) }; draftTimer.Tick += (_, _) => { draftTimer.Stop(); _vm.Store.SetDraft(key, editor.Text ?? ""); };
         editor.TextChanged += (_, _) => { draftTimer.Stop(); draftTimer.Start(); };
@@ -84,23 +86,37 @@ public sealed partial class MainWindow
     {
         if (urls.Length == 0) return; var index = Math.Clamp(start, 0, urls.Length - 1); var window = Dialog("图片查看器", 1000, 740); window.MinWidth = 640; window.MinHeight = 440;
         using var lifetime = new CancellationTokenSource(); var host = new ContentControl(); var status = Text(""); var scroll = new ScrollViewer { Content = host, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
-        Bitmap? bitmap = null; string? local = null; double zoom = 1; CancellationTokenSource? load = null;
-        void Fit() { if (bitmap == null) return; host.Width = double.NaN; host.Height = double.NaN; if (host.Content is Image i) i.Stretch = Stretch.Uniform; zoom = 1; }
+        Bitmap? bitmap = null; string? local = null; double zoom = 1; bool fitted = true; CancellationTokenSource? load = null;
+        void Fit() { fitted = true; if (bitmap == null) return; host.Width = Math.Max(1, scroll.Bounds.Width - 16); host.Height = Math.Max(1, scroll.Bounds.Height - 16); if (host.Content is Image i) i.Stretch = Stretch.Uniform; zoom = Math.Min(host.Width / bitmap.PixelSize.Width, host.Height / bitmap.PixelSize.Height); }
+        scroll.SizeChanged += (_, _) => { if (fitted) Fit(); };
         async Task Load()
         {
-            load?.Cancel(); load?.Dispose(); load = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); var token = load.Token; status.Text = T("正在加载…"); host.Content = null; bitmap?.Dispose(); bitmap = null;
+            load?.Cancel(); load?.Dispose(); load = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); var token = load.Token; status.Text = T("正在加载…"); host.Content = null; bitmap?.Dispose(); bitmap = null; local = null;
             try
             {
-                local = await _images.FetchAsync(urls[index], token); bitmap = ImageService.Decode(local, 2048); var signature = new byte[6]; using (var source = File.OpenRead(local)) _ = source.Read(signature);
+                var fetched = await _images.FetchAsync(urls[index], token); token.ThrowIfCancellationRequested(); var decoded = await Task.Run(() => ImageService.Decode(fetched, 2048), token); if (token.IsCancellationRequested) { decoded.Dispose(); return; } local = fetched; bitmap = decoded; var signature = new byte[6]; using (var source = File.OpenRead(local)) _ = source.Read(signature);
                 host.Content = OperatingSystem.IsMacOS() && System.Text.Encoding.ASCII.GetString(signature).StartsWith("GIF8") ? new NativeGif(local) : new Image { Source = bitmap, Stretch = Stretch.Uniform }; status.Text = $"{index + 1} / {urls.Length}"; Fit();
             }
             catch (OperationCanceledException) { }
-            catch (Exception e) { status.Text = e.Message; }
+            catch (Exception e) { if (!token.IsCancellationRequested) status.Text = e.Message; }
         }
-        var save = AsyncButton(T("保存图片"), async () => { if (local == null) return; var file = await window.StorageProvider.SaveFilePickerAsync(new() { Title = T("保存图片"), SuggestedFileName = "HeyRead-image" + (Path.GetExtension(new Uri(urls[index]).AbsolutePath) is { Length: > 1 and < 8 } ext ? ext : ".jpg") }); if (file != null) { await using var output = await file.OpenWriteAsync(); await using var input = File.OpenRead(local); await input.CopyToAsync(output); } });
-        var tools = Row(8, AsyncButton(T("上一张"), async () => { index = (index - 1 + urls.Length) % urls.Length; await Load(); }), AsyncButton(T("下一张"), async () => { index = (index + 1) % urls.Length; await Load(); }), Button(T("适应窗口"), Fit), save, Button(T("分享"), () => Native.Share(local == null ? urls[index] : new Uri(local).AbsoluteUri)), status);
+        var save = AsyncButton(T("保存图片"), async () =>
+        {
+            var filePath = local; if (filePath == null) return;
+            var file = await window.StorageProvider.SaveFilePickerAsync(new() { Title = T("保存图片"), SuggestedFileName = "HeyRead-image" + ImageService.Extension(filePath) });
+            if (file != null) { await using var output = await file.OpenWriteAsync(); if (output.CanSeek) output.SetLength(0); await using var input = File.OpenRead(filePath); await input.CopyToAsync(output); }
+        });
+        var tools = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
+        foreach (var tool in new Control[] { AsyncButton(T("上一张"), async () => { index = (index - 1 + urls.Length) % urls.Length; await Load(); }), AsyncButton(T("下一张"), async () => { index = (index + 1) % urls.Length; await Load(); }), Button(T("适应窗口"), Fit), save, AsyncButton(T("分享"), async () =>
+        {
+            var filePath = local; if (filePath == null) { Native.Share(urls[index]); return; }
+            var directory = Path.Combine(_vm.Store.Root, "cache", "share"); Directory.CreateDirectory(directory);
+            var destination = Path.Combine(directory, Path.GetFileName(filePath) + ImageService.Extension(filePath));
+            await using (var input = File.OpenRead(filePath)) await using (var output = File.Create(destination)) await input.CopyToAsync(output);
+            Native.Share(new Uri(destination).AbsoluteUri);
+        }), status }) tools.Children.Add(tool);
         var grid = new Grid { RowDefinitions = new("Auto,*"), Margin = new(16), RowSpacing = 12 }; grid.Children.Add(tools); Grid.SetRow(scroll, 1); grid.Children.Add(scroll); window.Content = grid;
-        scroll.PointerWheelChanged += (_, e) => { if (bitmap == null || !e.KeyModifiers.HasFlag(KeyModifiers.Meta)) return; zoom = Math.Clamp(zoom * (e.Delta.Y > 0 ? 1.2 : 1 / 1.2), 0.1, 8); host.Width = bitmap.PixelSize.Width * zoom; host.Height = bitmap.PixelSize.Height * zoom; if (host.Content is Image i) i.Stretch = Stretch.Fill; e.Handled = true; };
+        scroll.PointerWheelChanged += (_, e) => { if (bitmap == null || !e.KeyModifiers.HasFlag(KeyModifiers.Meta)) return; fitted = false; zoom = Math.Clamp(zoom * (e.Delta.Y > 0 ? 1.2 : 1 / 1.2), 0.1, 8); host.Width = bitmap.PixelSize.Width * zoom; host.Height = bitmap.PixelSize.Height * zoom; if (host.Content is Image i) i.Stretch = Stretch.Fill; e.Handled = true; };
         window.KeyDown += async (_, e) => { if (e.Key == Key.Escape) window.Close(); if (e.Key is Key.Left or Key.Right) { index = (index + (e.Key == Key.Right ? 1 : urls.Length - 1)) % urls.Length; await Load(); } };
         window.Opened += async (_, _) => await Load(); window.Closed += (_, _) => { lifetime.Cancel(); load?.Cancel(); host.Content = null; bitmap?.Dispose(); }; await window.ShowDialog(this); load?.Dispose();
     }
@@ -121,7 +137,7 @@ public sealed partial class MainWindow
     {
         var window = Dialog(T(existing == null ? "添加规则" : "编辑"), 480, 380);
         var kind = new ComboBox { ItemsSource = Enum.GetNames<RuleKind>().Select(k => new ChoiceOption(k, T(k))).ToArray(), SelectedIndex = (int)(existing?.Kind ?? RuleKind.KEYWORD), HorizontalAlignment = HorizontalAlignment.Stretch };
-        var value = new TextBox { Text = existing?.Value ?? "", PlaceholderText = "关键词或 ID" }; var label = new TextBox { Text = existing?.Label ?? "", PlaceholderText = "备注（身份规则可选）" }; var error = Text("关键词匹配标题与摘要；身份规则使用小黑盒 ID。", 12, muted: true);
+        var value = new TextBox { Text = existing?.Value ?? "", PlaceholderText = T("关键词或 ID") }; var label = new TextBox { Text = existing?.Label ?? "", PlaceholderText = T("备注（身份规则可选）") }; var error = Text(T("关键词匹配标题与摘要；身份规则使用小黑盒 ID。"), 12, muted: true);
         window.Content = Stack(16, Text(T("内容屏蔽"), 20, true), kind, value, label, error, Row(8, Button(T("取消"), window.Close), Button(T("保存"), () => { try { var k = Enum.Parse<RuleKind>(((ChoiceOption)kind.SelectedItem!).Value); var rule = new BlockRule(k, value.Text ?? "", k == RuleKind.KEYWORD ? "" : label.Text ?? "", existing?.Enabled ?? true, k == RuleKind.KEYWORD ? null : Source.HEYBOX).Validate(); if (existing != null)
                     {
                         var index = _vm.Prefs.Rules.FindIndex(r => r.Identity == existing.Identity);
@@ -141,8 +157,8 @@ public sealed partial class MainWindow
         await using var input = await files[0].OpenReadAsync(); using var output = new MemoryStream(); var buffer = new byte[8192]; int n; while ((n = await input.ReadAsync(buffer)) > 0) { if (output.Length + n > 262144) throw new ArgumentException("规则文件超过 256 KiB"); output.Write(buffer, 0, n); }
         var import = BlockingCodec.Import(output.ToArray()); var added = import.Rules.Where(x => !_vm.Prefs.Rules.Any(r => r.Identity == x.Identity)).ToArray();
         if (_vm.Prefs.Rules.Count + added.Length > 500) throw new ArgumentException("合并后超过 500 条规则");
-        var details = string.Join("\n", Enum.GetValues<RuleKind>().Select(k => $"{k}: {added.Count(r => r.Kind == k)}"));
-        if (await Confirm("导入预览", $"新增 {added.Length} 条，重复 {import.Duplicates + import.Rules.Count - added.Length} 条。\n{details}")) { _vm.Store.Merge(import); _vm.SaveSettings(); Render(); }
+        var details = string.Join("\n", Enum.GetValues<RuleKind>().Select(k => $"{T(k.ToString())}: {added.Count(r => r.Kind == k)}"));
+        if (await Confirm("导入预览", F("新增 {0} 条，重复 {1} 条。\n{2}", added.Length, import.Duplicates + import.Rules.Count - added.Length, details))) { _vm.Store.Merge(import); _vm.SaveSettings(); Render(); }
     }
     private async Task ExportRules()
     {

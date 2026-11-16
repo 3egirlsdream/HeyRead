@@ -13,8 +13,6 @@ public static class Native
     [DllImport("libHeyReadNative.dylib")] internal static extern void hr_gif_release(nint view);
     [DllImport("libHeyReadNative.dylib")] internal static extern int hr_reduce_motion();
     private const string Lib = "libHeyReadNative.dylib";
-    [DllImport(Lib)] private static extern nint hr_keychain_read([MarshalAs(UnmanagedType.LPUTF8Str)] string service);
-    [DllImport(Lib)] private static extern int hr_keychain_write([MarshalAs(UnmanagedType.LPUTF8Str)] string service, [MarshalAs(UnmanagedType.LPUTF8Str)] string? value);
     [DllImport(Lib)] private static extern void hr_free(nint p);
     [DllImport(Lib)] private static extern nint hr_font_register([MarshalAs(UnmanagedType.LPUTF8Str)] string path);
     [DllImport(Lib)] private static extern nint hr_accent();
@@ -39,10 +37,14 @@ public static class Native
     private static readonly ConcurrentDictionary<long, TaskCompletionSource<string[]>> Pending = new();
     private static long _id;
     public static string? TakeString(nint p) { if (p == 0) return null; try { return Marshal.PtrToStringUTF8(p); } finally { hr_free(p); } }
-    public static Session? ReadSession(string service) { var raw = TakeString(hr_keychain_read(service)); try { return raw == null ? null : JsonSerializer.Deserialize<Session>(raw); } catch (JsonException) { return null; } }
-    public static void WriteSession(string service, Session? session) { var status = hr_keychain_write(service, session == null ? null : JsonSerializer.Serialize(session)); if (status != 0) throw new IOException($"Keychain 操作失败（{status}）"); }
     public static string? RegisterFont(string path) => OperatingSystem.IsMacOS() ? TakeString(hr_font_register(path)) : null;
+    [DllImport(Lib)] private static extern int hr_font_unregister([MarshalAs(UnmanagedType.LPUTF8Str)] string path);
+    public static void UnregisterFont(string path) { if (OperatingSystem.IsMacOS()) hr_font_unregister(path); }
+    [DllImport(Lib)] private static extern nint hr_font_inspect([MarshalAs(UnmanagedType.LPUTF8Str)] string path);
+    public static string? InspectFont(string path) => OperatingSystem.IsMacOS() ? TakeString(hr_font_inspect(path)) : null;
     public static string Accent() => OperatingSystem.IsMacOS() ? TakeString(hr_accent()) ?? "#2563D9" : "#2563D9";
+    [DllImport(Lib)] private static extern void hr_language([MarshalAs(UnmanagedType.LPUTF8Str)] string language);
+    public static void SetLanguage(string language) { if (OperatingSystem.IsMacOS()) hr_language(language); }
     public static void Share(string value) { if (OperatingSystem.IsMacOS()) hr_share(value); }
     public static void Verify(string url) { if (OperatingSystem.IsMacOS()) hr_verify(url); }
     public static async Task<string[]> TranslateAsync(string[] text, string target, CancellationToken ct)
@@ -57,22 +59,9 @@ public static class Native
     private static void Complete(long id, nint result)
     {
         if (!Pending.TryRemove(id, out var tcs)) return;
-        try { using var json = JsonDocument.Parse(Marshal.PtrToStringUTF8(result) ?? "{}"); if (json.RootElement.TryGetProperty("error", out var error)) tcs.TrySetException(new InvalidOperationException(error.GetString())); else tcs.TrySetResult(json.RootElement.GetProperty("text").EnumerateArray().Select(x => x.GetString() ?? "").ToArray()); }
+        try { using var json = JsonDocument.Parse(Marshal.PtrToStringUTF8(result) ?? "{}"); if (json.RootElement.TryGetProperty("error", out var error))  { if (error.GetString() == "翻译已取消") tcs.TrySetCanceled(); else tcs.TrySetException(new InvalidOperationException(error.GetString())); } else tcs.TrySetResult(json.RootElement.GetProperty("text").EnumerateArray().Select(x => x.GetString() ?? "").ToArray()); }
         catch (Exception e) { tcs.TrySetException(e); }
     }
-}
-public sealed class MacSessionStore : ISessionStore
-{
-    private readonly bool _isolated;
-    private readonly string _service;
-    public MacSessionStore(bool isolated, string? isolatedRoot = null)
-    {
-        _isolated = isolated && isolatedRoot == null;
-        _service = isolatedRoot == null ? "cn.heyread.desktop" : "cn.heyread.desktop.test." + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(isolatedRoot))))[..16];
-    }
-    private Session? _memory;
-    public Session? Load() => _isolated || !OperatingSystem.IsMacOS() ? _memory : Native.ReadSession(_service);
-    public void Save(Session? session) { if (!_isolated && OperatingSystem.IsMacOS()) Native.WriteSession(_service, session); _memory = session; }
 }
 public sealed class AppleTranslation : ITranslationService { public Task<string[]> TranslateAsync(string[] text, string target, CancellationToken ct) => Native.TranslateAsync(text, target, ct); }
 public sealed class NativeVideo : NativeControlHost

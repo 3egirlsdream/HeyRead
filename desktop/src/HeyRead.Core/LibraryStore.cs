@@ -13,17 +13,19 @@ public sealed record Preferences
     public bool RecordHistory { get; set; } = true;
     public bool RestoreNavigation { get; set; } = true;
     public double BodySize { get; set; } = 17;
-    public double LineHeight { get; set; } = 30;
-    public double ParagraphSpacing { get; set; } = 20;
+    public double LineHeight { get; set; } = 24;
+    public double ParagraphSpacing { get; set; } = 14;
     public string BodyFont { get; set; } = "System";
     public string UiFont { get; set; } = "System";
     public bool BlockingEnabled { get; set; } = true;
     public bool BlockFavorites { get; set; }
     public bool BlockHistory { get; set; }
     public List<BlockRule> Rules { get; set; } = [];
+    public NavigationState? Navigation { get; set; }
     public string LastPage { get; set; } = "discover";
     public Story? LastStory { get; set; }
-    public double ListWidth { get; set; } = 370;
+    public double ListWidth { get; set; } = 432;
+    public int VisualRevision { get; set; }
 }
 public sealed record HistoryEntry(Story Story, DateTimeOffset Viewed, double ArticleOffset = 0, double CommentOffset = 0);
 public sealed record SearchEntry(string Query, Destination? Scope, DateTimeOffset Time);
@@ -39,6 +41,13 @@ public sealed class LibraryStore
     {
         Root = Path.GetFullPath(root); Directory.CreateDirectory(Root); Directory.CreateDirectory(Path.Combine(Root, "cache")); Directory.CreateDirectory(Path.Combine(Root, "fonts"));
         Preferences = Read<Preferences>("preferences.json") ?? new(); History = Read<List<HistoryEntry>>("history.json") ?? []; Searches = Read<List<SearchEntry>>("searches.json") ?? []; Drafts = Read<Dictionary<string, string>>("drafts.json") ?? [];
+        if (Preferences.VisualRevision < 2)
+        {
+            if (Preferences.ListWidth == 370) Preferences.ListWidth = 432;
+            if (Preferences.BodySize == 17 && Preferences.LineHeight == 30) Preferences.LineHeight = 24;
+            if (Preferences.ParagraphSpacing == 20) Preferences.ParagraphSpacing = 14;
+            Preferences.VisualRevision = 2;
+        }
         Preferences.BodySize = Math.Clamp(Preferences.BodySize, 14, 26); Preferences.LineHeight = Math.Clamp(Preferences.LineHeight, Preferences.BodySize * 1.2, Preferences.BodySize * 2.4); Preferences.ParagraphSpacing = Math.Clamp(Preferences.ParagraphSpacing, 8, 40);
     }
     private T? Read<T>(string name) { try { return JsonSerializer.Deserialize<T>(File.ReadAllBytes(Path.Combine(Root, name)), BlockingCodec.Options); } catch (Exception e) when (e is IOException or JsonException or NotSupportedException) { return default; } }
@@ -65,10 +74,13 @@ public sealed class LibraryStore
         lock (_sync) { var path = Path.Combine(Root, name); var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp"; try { File.WriteAllBytes(temp, JsonSerializer.SerializeToUtf8Bytes(data, BlockingCodec.Options)); if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite); File.Move(temp, path, true); } finally { if (File.Exists(temp)) File.Delete(temp); } }
     }
     public long CacheBytes() => Directory.EnumerateFiles(Path.Combine(Root, "cache"), "*", SearchOption.AllDirectories).Sum(x => new FileInfo(x).Length);
-    public void ClearCache() { foreach (var file in Directory.EnumerateFiles(Path.Combine(Root, "cache"))) File.Delete(file); }
+    public void ClearCache() { foreach (var file in Directory.EnumerateFiles(Path.Combine(Root, "cache"), "*", SearchOption.AllDirectories)) File.Delete(file); }
     public string ImportFont(string path)
     {
         if (!new[] { ".ttf", ".otf", ".ttc" }.Contains(Path.GetExtension(path).ToLowerInvariant()) || new FileInfo(path).Length is 0 or > 33554432) throw new ArgumentException("请选择不超过 32 MiB 的 TTF、OTF 或 TTC 字体");
-        var name = Path.GetFileName(path); File.Copy(path, Path.Combine(Root, "fonts", name), true); return name;
+        var name = Path.GetFileName(path); var target = Path.Combine(Root, "fonts", name);
+        if (Path.GetFullPath(path) == target) return name;
+        if (File.Exists(target)) { using var input = File.OpenRead(path); var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(input))[..8]; name = Path.GetFileNameWithoutExtension(name) + "-" + hash + Path.GetExtension(name); target = Path.Combine(Root, "fonts", name); }
+        if (!File.Exists(target)) File.Copy(path, target); return name;
     }
 }
