@@ -30,7 +30,7 @@ def manifest(directory, key_file):
         name=f'{meta["PackageName"]}-{v}-{rid}.zip'; path=directory/name
         digest=hashlib.sha256(path.read_bytes()).hexdigest()
         assets.append({'rid':rid,'file':name,'url':f'https://github.com/{meta["Repository"]}/releases/download/{meta["TagPrefix"]}{v}/{name}','size':path.stat().st_size,'sha256':digest})
-    doc={'schema':1,'product':meta['PackageName'],'bundleIdentifier':meta['BundleId'],'repository':meta['Repository'],'version':v,'tag':meta['TagPrefix']+v,'assets':assets}
+    doc={'schema':1,'product':meta['PackageName'],'bundleIdentifier':meta['BundleId'],'repository':meta['Repository'],'version':v,'tag':meta['TagPrefix']+v,'assets':assets,'notes':(ROOT/'RELEASE-NOTES.md').read_text()}
     path=directory/'update-manifest.json';path.write_text(json.dumps(doc,ensure_ascii=False,sort_keys=True,indent=2)+'\n')
     signature=directory/'update-manifest.sig';subprocess.run(['openssl','dgst','-sha256','-sign',str(key_file),'-out',str(signature),str(path)],check=True)
     subprocess.run(['openssl','dgst','-sha256','-verify',str(ROOT/'src/HeyRead.Core/UpdatePublicKey.pem'),'-signature',str(signature),str(path)],check=True)

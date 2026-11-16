@@ -406,20 +406,20 @@
           "xunit.v3.runner.common": "[3.2.2]"
         }
       },
-      "HeyRead": {
+      "heyread.core": {
+        "type": "Project",
+        "dependencies": {
+          "AngleSharp": "[1.10.3, )"
+        }
+      },
+      "xiaoheihe-community-formac": {
         "type": "Project",
         "dependencies": {
           "Avalonia.Desktop": "[12.1.6, )",
           "Avalonia.Themes.Fluent": "[12.1.6, )",
           "CommunityToolkit.Mvvm": "[8.4.0, )",
-          "HeyRead.Core": "[1.0.0, )",
+          "HeyRead.Core": "[0.3.0, )",
           "QRCoder": "[1.7.0, )"
-        }
-      },
-      "heyread.core": {
-        "type": "Project",
-        "dependencies": {
-          "AngleSharp": "[1.10.3, )"
         }
       }
     },

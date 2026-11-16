@@ -45,6 +45,17 @@ public sealed class UpdateTests
         Assert.Null(await service.CheckAsync("0.3.0", "osx-x64", TestContext.Current.CancellationToken)); Assert.Equal(4, calls);
     }
     [Fact]
+    public async Task AnonymousApiRateLimitFallsBackToTheSameSignedLatestManifest()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256); var bytes = JsonSerializer.SerializeToUtf8Bytes(Manifest()); var signature = Sign(key, bytes);
+        using var service = new GitHubUpdateService(new RouteHandler(request =>
+        {
+            if (request.RequestUri!.Host == "api.github.com") return new(HttpStatusCode.Forbidden);
+            return Bytes(request.RequestUri.AbsolutePath.EndsWith(".sig") ? signature : bytes);
+        }), key.ExportSubjectPublicKeyInfoPem());
+        var update = await service.CheckAsync("0.2.0", "osx-arm64", TestContext.Current.CancellationToken); Assert.Equal("0.3.0", update?.Version); Assert.Equal("osx-arm64", update?.Asset.Rid);
+    }
+    [Fact]
     public async Task DownloadRejectsTamperedOrTruncatedPayloadAndRemovesPartialFile()
     {
         var root = Temp(); Directory.CreateDirectory(root);

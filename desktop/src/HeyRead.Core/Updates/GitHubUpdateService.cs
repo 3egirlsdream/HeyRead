@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 namespace HeyRead.Core.Updates;
 
 public sealed record UpdateAsset(string Rid, string File, string Url, long Size, string Sha256);
-public sealed record UpdateManifest(int Schema, string Product, string BundleIdentifier, string Repository, string Version, string Tag, UpdateAsset[] Assets);
+public sealed record UpdateManifest(int Schema, string Product, string BundleIdentifier, string Repository, string Version, string Tag, UpdateAsset[] Assets, string Notes = "");
 public sealed record AvailableUpdate(string Version, string Notes, string ReleaseUrl, UpdateAsset Asset);
 public sealed record UpdateProgress(double Percentage, string State);
 
@@ -41,6 +41,7 @@ public sealed class GitHubUpdateService : IDisposable
         var current = ParseVersion(currentVersion); rid ??= CurrentRid;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(45)); var token = timeout.Token;
         using var response = await SendAsync(new($"https://api.github.com/repos/{ProductInfo.Repository}/releases/latest"), token);
+        if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests) return await CheckSignedLatestAsync(current, rid, token);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode(); var root = JsonNode.Parse(await HeyReadApi.ReadLimitedAsync(response, 2 * 1024 * 1024, token));
         if (!IsMacRelease(root))
@@ -63,6 +64,19 @@ public sealed class GitHubUpdateService : IDisposable
         var selected = manifest.Assets.SingleOrDefault(a => a.Rid == rid) ?? throw new InvalidDataException("发布不支持当前处理器");
         if (Find(selected.File).AbsoluteUri != selected.Url) throw new InvalidDataException("更新资源地址不匹配");
         return new(version, root["body"]?.GetValue<string>() is { } notes ? notes[..Math.Min(notes.Length, 16000)] : "", $"https://github.com/{ProductInfo.Repository}/releases/tag/{ProductInfo.TagPrefix}{version}", selected);
+    }
+    private async Task<AvailableUpdate?> CheckSignedLatestAsync(Version current, string rid, CancellationToken ct)
+    {
+        var baseUri = $"https://github.com/{ProductInfo.Repository}/releases/latest/download/";
+        using var response = await SendAsync(new(baseUri + "update-manifest.json"), ct);
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode(); var bytes = await HeyReadApi.ReadLimitedAsync(response, 65536, ct);
+        var declaredVersion = JsonSerializer.Deserialize<UpdateManifest>(bytes, JsonOptions)?.Version ?? throw new InvalidDataException("更新清单版本为空");
+        var signature = await GetBytesAsync(new(baseUri + "update-manifest.sig"), 256, ct);
+        var manifest = VerifyManifest(bytes, signature, _publicKey, declaredVersion);
+        if (ParseVersion(manifest.Version) <= current) return null;
+        var selected = manifest.Assets.SingleOrDefault(a => a.Rid == rid) ?? throw new InvalidDataException("发布不支持当前处理器");
+        return new(manifest.Version, manifest.Notes, $"https://github.com/{ProductInfo.Repository}/releases/tag/{manifest.Tag}", selected);
     }
     private static bool IsMacRelease(JsonNode? node)
     {

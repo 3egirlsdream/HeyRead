@@ -16,7 +16,7 @@ dotnet publish src/HeyRead.Desktop -c Release -r "$rid" --self-contained true -p
 python3 - "$app/Contents/Info.plist" "$version" <<'PY'
 import json,plistlib,subprocess,sys
 meta=json.loads(subprocess.check_output(['python3','scripts/release/release.py','metadata'],text=True))
-info={'CFBundleIconFile':'AppIcon','CFBundleExecutable':meta['PackageName'],'CFBundleIdentifier':meta['BundleId'],'CFBundleName':meta['PackageName'],'CFBundleDisplayName':meta['DisplayName'],'CFBundleVersion':sys.argv[2],'CFBundleShortVersionString':sys.argv[2],'CFBundlePackageType':'APPL','LSMinimumSystemVersion':'15.0','NSHighResolutionCapable':True,'NSPrincipalClass':'NSApplication','LSApplicationCategoryType':'public.app-category.news','CFBundleLocalizations':['zh-Hans','zh-Hant','en','fr']}
+info={'CFBundleIconFile':'AppIcon','CFBundleExecutable':meta['PackageName'],'CFBundleIdentifier':meta['BundleId'],'CFBundleName':meta['DisplayName'],'CFBundleDisplayName':meta['DisplayName'],'CFBundleVersion':sys.argv[2],'CFBundleShortVersionString':sys.argv[2],'CFBundlePackageType':'APPL','LSMinimumSystemVersion':'15.0','NSHighResolutionCapable':True,'NSPrincipalClass':'NSApplication','LSApplicationCategoryType':'public.app-category.news','CFBundleLocalizations':['zh-Hans','zh-Hant','en','fr']}
 with open(sys.argv[1],'wb') as file:plistlib.dump(info,file)
 PY
 cp native/build/AppIcon.icns "$app/Contents/Resources/"
