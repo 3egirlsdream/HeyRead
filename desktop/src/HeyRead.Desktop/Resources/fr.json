@@ -210,5 +210,17 @@
   "请从已安装的 .app 启动后再自动更新": "Lancez l’application installée pour effectuer la mise à jour",
   "应用所在位置不可写，请先将应用移到应用程序文件夹": "Déplacez l’application dans Applications avant la mise à jour",
   "更新清单签名校验失败": "Échec de vérification de la signature de mise à jour",
-  "更新包 SHA-256 校验失败": "Échec de vérification de la somme de contrôle"
+  "更新包 SHA-256 校验失败": "Échec de vérification de la somme de contrôle",
+  "复制账号 ID": "Copier l’identifiant",
+  "已登录小黑盒": "Connecté à Heybox",
+  "我的主页": "Mon profil",
+  "全站": "Tout",
+  "删除记录": "Supprimer la recherche",
+  "暂无搜索记录": "Aucune recherche récente",
+  "查看公告": "Voir les annonces",
+  "查看原图": "Ouvrir l’image originale",
+  "当我们把阅读的节奏放慢，文字之间的留白，也成为故事的一部分。": "Quand on ralentit la lecture, les espaces entre les mots font partie du récit.",
+  "分区": "Section",
+  "话题": "Sujet",
+  "先浏览分区或话题，再在此范围搜索": "Consultez une section ou un sujet pour y rechercher du contenu"
 }

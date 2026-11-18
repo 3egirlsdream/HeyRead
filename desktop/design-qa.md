@@ -17,3 +17,9 @@ Reference: A/light and A/dark discovery 01 and reading 11. Original rasters are 
 - P3: Fluent book/chat/list icons replace the generated icon shapes; macOS supplies traffic lights, system sheets, native media and sharing.
 
 Structure and component alignment have been reviewed. Pixel-for-pixel identity has **not** passed acceptance. The task's `outputs/heyread-macos-0.2/index.html` provides reference/actual comparison, rather than asserting an unsupported pixel match.
+
+## 0.3.1 · 2026-11-18
+
+At 1280×800 the default 16-point article text, 22-point line height and 10-point paragraph spacing bring the game card and quote into the first screen of the approved Sekiro example. Saved typography overrides are preserved. The workspace gallery at `outputs/a-refinement/index.html` pairs actual screenshots with A pages 02, 07, 11 and 16. The account capture shows the signed-out state. The narrow comment capture uses 900×640.
+
+Generated glyphs, icons, system chrome and the newer product branding still differ. Pages 17–24 have shared layout rules but no individual A rasters for pixel comparison.

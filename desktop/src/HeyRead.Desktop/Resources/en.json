@@ -210,5 +210,17 @@
   "请从已安装的 .app 启动后再自动更新": "Start the installed app to update automatically",
   "应用所在位置不可写，请先将应用移到应用程序文件夹": "Move the app to the Applications folder before updating",
   "更新清单签名校验失败": "Update manifest signature verification failed",
-  "更新包 SHA-256 校验失败": "Update checksum verification failed"
+  "更新包 SHA-256 校验失败": "Update checksum verification failed",
+  "复制账号 ID": "Copy account ID",
+  "已登录小黑盒": "Signed in to Heybox",
+  "我的主页": "My profile",
+  "全站": "All",
+  "删除记录": "Remove search",
+  "暂无搜索记录": "No recent searches",
+  "查看公告": "View announcements",
+  "查看原图": "Open original image",
+  "当我们把阅读的节奏放慢，文字之间的留白，也成为故事的一部分。": "As we slow down, the space between words becomes part of the story.",
+  "分区": "Section",
+  "话题": "Topic",
+  "先浏览分区或话题，再在此范围搜索": "Visit a section or topic to search within it"
 }

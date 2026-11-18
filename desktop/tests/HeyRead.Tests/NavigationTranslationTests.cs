@@ -9,6 +9,30 @@ namespace HeyRead.Tests;
 public sealed class NavigationTranslationTests
 {
     [AvaloniaFact]
+    public async Task RecentSearchKeepsItsProviderAndScopeAcrossRestartAndIndividualDeletion()
+    {
+        var root = Temp();
+        try
+        {
+            var store = new LibraryStore(root);
+            var scope = new Destination("section", "42", "Games");
+            store.Search("Sekiro", scope);
+            store.Search("Sekiro", null, steam: true);
+            var restored = new LibraryStore(root);
+            using var api = new HeyReadApi(new FakeHandler("""{"items":[]}"""));
+            using var vm = Create(api, restored, new ControlledTranslation());
+            await vm.ReplaySearchAsync(restored.Searches.Single(entry => entry.Steam));
+            Assert.Equal("games", vm.Page);
+            Assert.Null(vm.SearchScope);
+            restored.RemoveSearch(restored.Searches.Single(entry => entry.Steam));
+            var remaining = Assert.Single(new LibraryStore(root).Searches);
+            Assert.Equal(scope, remaining.Scope);
+            Assert.False(remaining.Steam);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [AvaloniaFact]
     public async Task BackForwardAndRestartRestoreSearchScopeAndReadingPosition()
     {
         var root = Temp();

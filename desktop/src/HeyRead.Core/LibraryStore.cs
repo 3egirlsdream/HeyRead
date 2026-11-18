@@ -12,9 +12,9 @@ public sealed record Preferences
     public bool Animations { get; set; } = true;
     public bool RecordHistory { get; set; } = true;
     public bool RestoreNavigation { get; set; } = true;
-    public double BodySize { get; set; } = 17;
-    public double LineHeight { get; set; } = 24;
-    public double ParagraphSpacing { get; set; } = 14;
+    public double BodySize { get; set; } = 16;
+    public double LineHeight { get; set; } = 22;
+    public double ParagraphSpacing { get; set; } = 10;
     public string BodyFont { get; set; } = "System";
     public string UiFont { get; set; } = "System";
     public bool BlockingEnabled { get; set; } = true;
@@ -28,7 +28,7 @@ public sealed record Preferences
     public int VisualRevision { get; set; }
 }
 public sealed record HistoryEntry(Story Story, DateTimeOffset Viewed, double ArticleOffset = 0, double CommentOffset = 0);
-public sealed record SearchEntry(string Query, Destination? Scope, DateTimeOffset Time);
+public sealed record SearchEntry(string Query, Destination? Scope, DateTimeOffset Time, bool Steam = false);
 public sealed class LibraryStore
 {
     public string Root { get; }
@@ -58,9 +58,13 @@ public sealed class LibraryStore
     }
     public static Story Summary(Story story) => story with { Body = story.Excerpt, Blocks = null };
     public void ClearHistory() { History.Clear(); Write("history.json", History); }
-    public void Search(string query, Destination? scope)
+    public void Search(string query, Destination? scope, bool steam = false)
     {
-        Searches.RemoveAll(x => x.Query == query && x.Scope == scope); Searches.Insert(0, new(query, scope, DateTimeOffset.UtcNow)); if (Searches.Count > 50) Searches.RemoveRange(50, Searches.Count - 50); Write("searches.json", Searches);
+        Searches.RemoveAll(x => x.Query == query && x.Scope == scope && x.Steam == steam); Searches.Insert(0, new(query, scope, DateTimeOffset.UtcNow, steam)); if (Searches.Count > 50) Searches.RemoveRange(50, Searches.Count - 50); Write("searches.json", Searches);
+    }
+    public void RemoveSearch(SearchEntry entry)
+    {
+        if (Searches.Remove(entry)) Write("searches.json", Searches);
     }
     public void ClearSearches() { Searches.Clear(); Write("searches.json", Searches); }
     public void SetDraft(string key, string text) { if (string.IsNullOrEmpty(text)) Drafts.Remove(key); else Drafts[key] = text; Write("drafts.json", Drafts); }

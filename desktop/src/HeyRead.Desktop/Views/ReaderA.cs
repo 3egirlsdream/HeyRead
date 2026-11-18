@@ -37,7 +37,7 @@ public sealed partial class MainWindow
             Grid.SetRow(_readerFooter, 1); _readerFrame.Children.Add(_readerFooter); _readerMounted = true;
             _readerScroll.HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
         }
-        var identity = (story.Key, story.Blocks, _vm.IsArticleBlocked, _vm.DetailLoading, _vm.CommentsMode, _vm.CommentsRevision, _vm.CommentsLoading, _vm.CommentsError, _vm.DetailError, _vm.Translated, _vm.Translating, _vm.TranslationMode, _vm.TranslationState, _vm.TranslationError, _vm.Prefs.BodySize, _vm.Prefs.LineHeight, _vm.Prefs.ParagraphSpacing, _vm.Prefs.BodyFont, _vm.Prefs.NoImages, WideReader, _vm.Prefs.Language);
+        var identity = (story.Key, story.Blocks, article.Followed, _vm.IsArticleBlocked, _vm.DetailLoading, _vm.CommentsMode, _vm.CommentsRevision, _vm.CommentsLoading, _vm.CommentsError, _vm.DetailError, _vm.Translated, _vm.Translating, _vm.TranslationMode, _vm.TranslationState, _vm.TranslationError, _vm.Prefs.BodySize, _vm.Prefs.LineHeight, _vm.Prefs.ParagraphSpacing, _vm.Prefs.BodyFont, _vm.Prefs.NoImages, WideReader, _vm.Prefs.Language);
         if (!Equals(_readerContentIdentity, identity))
         {
             _readerContentIdentity = identity;
@@ -45,8 +45,66 @@ public sealed partial class MainWindow
             var offset = _vm.CommentsMode ? _commentOffset : _articleOffset;
             Dispatcher.UIThread.Post(() => { if (_renderedKey == story.Key) _readerScroll.Offset = new(0, offset); }, DispatcherPriority.Loaded);
         }
-        _readerFooter.Content = BuildReadingActions(article); _readerFooter.IsEnabled = !_vm.IsArticleBlocked;
+        var editorKey = _vm.CommentsMode ? (_vm.Api.Session?.UserId ?? "") + ":" + story.Key + ":root" : null;
+        if (editorKey == null || _editorKey != editorKey)
+        {
+            _editorKey = editorKey;
+            _readerFooter.Content = editorKey == null ? BuildReadingActions(article) : BuildCommentActions(article, editorKey);
+        }
+        _readerFooter.IsEnabled = !_vm.IsArticleBlocked;
         _detail.Content = _readerFrame;
+    }
+
+    private string? _editorKey;
+    private readonly HashSet<string> _pendingPosts = [];
+    private Control BuildCommentActions(Article article, string key)
+    {
+        var account = _vm.Api.Session?.UserId;
+        var editor = new TextBox { PlaceholderText = T("写下你的想法…"), MaxLength = 10000,
+            Text = _vm.Store.Drafts.GetValueOrDefault(key, ""), VerticalContentAlignment = VerticalAlignment.Center };
+        if (account != null)
+            editor.PropertyChanged += (_, change) =>
+            {
+                if (change.Property == TextBox.TextProperty) _vm.Store.SetDraft(key, editor.Text ?? "");
+            };
+
+        var send = AsyncButton(T("发送"), async () =>
+        {
+            if (_vm.Api.Session == null)
+            {
+                await LoginDialog();
+                if (_vm.Api.Session != null && _vm.Article?.Story.Key == article.Story.Key) SwitchComments(true);
+                return;
+            }
+            if (account != _vm.Api.Session.UserId || _vm.Article?.Story.Key != article.Story.Key) return;
+            var draft = editor.Text ?? "";
+            if (string.IsNullOrWhiteSpace(draft)) { editor.Focus(); return; }
+            if (!_pendingPosts.Add(key)) return;
+            editor.IsReadOnly = true;
+            try
+            {
+                await _vm.Api.SocialAsync(article.Story, "comment", true, draft, _vm.Article.AuthCode);
+                if (_vm.Store.Drafts.GetValueOrDefault(key) == draft)
+                {
+                    _vm.Store.SetDraft(key, "");
+                    editor.Text = "";
+                }
+                _vm.Toast = T("发送成功");
+                if (_editorKey == key && _vm.Article?.Story.Key == article.Story.Key)
+                {
+                    await _vm.RetryDetailAsync();
+                    if (_vm.Article?.Story.Key == article.Story.Key && _vm.Api.Session?.UserId == account) SwitchComments(true);
+                }
+            }
+            catch (Exception e) { await Notice(T("发送失败，草稿已保留：") + T(e.Message)); }
+            finally { _pendingPosts.Remove(key); editor.IsReadOnly = false; }
+        }, "primary");
+        if (account == null)
+        {
+            editor.IsReadOnly = true;
+            editor.PlaceholderText = T("登录小黑盒");
+        }
+        return Brush(new Border { Child = Columns("*,12,Auto", editor, new Border(), send), Padding = new(20, 12), BorderThickness = new(0, 1, 0, 0) }, Border.BorderBrushProperty, "Line");
     }
     private Control BuildReadingActions(Article article)
     {
@@ -114,22 +172,23 @@ public sealed partial class MainWindow
         if (story.Notice != null) { var notice = Text(T(story.Notice), 12, muted: true); notice.Margin = new(0, 0, 0, 12); stack.Children.Add(notice); }
         var blocks = story.Blocks ?? ContentParser.Html(story.Body.Length > 0 ? story.Body : story.Excerpt);
         var hero = story.HeroImage ?? story.Image;
+        var gallery = ArticleImages(blocks).Prepend(hero).Where(url => !string.IsNullOrEmpty(url)).Cast<string>().Distinct().ToArray();
         if (!_vm.Prefs.NoImages && hero != null)
         {
             var picture = Picture(hero, WideReader ? 218 : 260); picture.Margin = new(0, 0, 0, _vm.VisualFixture && WideReader ? 6 : 18); stack.Children.Add(picture);
-            picture.Tapped += (_, _) => { if (!hero.StartsWith("design:")) Run(() => ImageViewer([hero], 0)); };
+            picture.Tapped += (_, _) => { if (!hero.StartsWith("design:")) Run(() => ImageViewer(gallery, 0)); };
             if (_vm.VisualFixture && WideReader) { var caption = Text(T("苇名城远景，雾气在山谷间流动，战斗的节奏也在此处逐渐展开。"), 12, muted: true); caption.Margin = new(0, 0, 0, 8); stack.Children.Add(caption); }
         }
         if (story.Source == Source.STEAM) stack.Children.Add(BuildTranslationBar());
         if (story.Source == Source.STEAM && _vm.TranslationMode == "translated" && _vm.TranslatedBlocks != null) blocks = _vm.TranslatedBlocks;
-        var gallery = ArticleImages(blocks).Distinct().ToArray();
-        foreach (var block in blocks)
+        for (var index = 0; index < blocks.Count; index++)
         {
+            var block = blocks[index];
             if (block.Kind == BlockKind.Image && block.Url == hero) continue;
             if (_vm.VisualFixture && !WideReader && block.Kind is BlockKind.Game or BlockKind.Quote) continue;
             if (story.Source == Source.STEAM && _vm.TranslationMode == "split" && _vm.TranslatedBlocks != null && block.Kind is BlockKind.Paragraph or BlockKind.Heading or BlockKind.ListItem or BlockKind.Quote)
             {
-                var index = blocks.ToList().IndexOf(block); var translated = _vm.TranslatedBlocks[index];
+                var translated = _vm.TranslatedBlocks[index];
                 stack.Children.Add(ReaderWidth >= 700 ? Columns("*,16,*", RenderBlock(block, gallery), new Border(), RenderBlock(translated, gallery)) : Stack(6, Text(T("原文"), 12, muted: true), RenderBlock(block, gallery), Text(T("译文"), 12, muted: true), RenderBlock(translated, gallery)));
             }
             else stack.Children.Add(RenderBlock(block, gallery));

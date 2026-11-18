@@ -13,7 +13,7 @@ public sealed partial class MainWindow
 {
     private Control BuildHeader()
     {
-        var back = ToolbarButton("chevron_left", "返回", async () => { SaveOffsets(); if (_narrow && _showDetail) { SaveOffsets(); _showDetail = false; UpdateResponsive(); } else await _vm.BackAsync(); });
+        var back = ToolbarButton("chevron_left", "返回", async () => { SaveOffsets(); if ((_narrow || IsDirectoryPage) && _showDetail) { ReturnToList(); } else await _vm.BackAsync(); });
         var forward = ToolbarButton("chevron_right", "前进", async () => { SaveOffsets(); await _vm.BackAsync(true); });
         var refresh = ToolbarButton("arrow_clockwise", "刷新", () => _vm.LoadAsync());
         _search.PlaceholderText = T("搜索文章、作者或游戏"); _search.Text = _vm.Query; _search.Height = 36; _search.FontSize = 16;
@@ -64,7 +64,8 @@ public sealed partial class MainWindow
         }
         var accountName = Text(_vm.VisualFixture ? "林间" : T(_vm.AccountName), 18); accountName.MaxLines = 1; accountName.TextTrimming = TextTrimming.CharacterEllipsis; ToolTip.SetTip(accountName, _vm.VisualFixture ? "林间" : T(_vm.AccountName));
         var account = Button("", () => Run(() => Navigate("account")), "nav"); account.Content = Columns("32,14,*,20", Avatar(_vm.VisualFixture ? "design:account" : _vm.Api.Session?.Avatar, 32), new Border(), accountName, Icons.Get("chevron_right", 18, "Muted")); account.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-        var settings = Button("", () => Run(() => Navigate("settings")), "nav"); settings.Content = Row(18, Icons.Get("settings", 25), Text(T("设置"), 18));
+        if (_vm.Page == "account") account.Classes.Add("selected");
+        var settings = Button("", () => Run(() => Navigate("settings")), "nav"); if (_vm.Page == "settings") settings.Classes.Add("selected"); settings.Content = Row(18, Icons.Get("settings", 25), Text(T("设置"), 18));
         var line = Line(); line.Margin = new(0, 0, 0, 12);
         var bottom = Stack(8, line, account, settings); bottom.Margin = new(13, 0, 13, 24);
         var content = new Grid { RowDefinitions = new("Auto,Auto,*,Auto") }; content.Children.Add(brand); Grid.SetRow(nav, 1); content.Children.Add(nav); Grid.SetRow(bottom, 3); content.Children.Add(bottom);
@@ -75,6 +76,76 @@ public sealed partial class MainWindow
         if (story == null) return new Border();
         var compactList = _vm.Prefs.ListWidth < 380;
         var title = Text(story.Title, 16, true); title.MaxLines = ReaderWidth < 700 && _vm.Prefs.ListWidth >= 400 ? 1 : 2; title.LineHeight = 21; title.TextTrimming = TextTrimming.CharacterEllipsis; ToolTip.SetTip(title, story.Title);
+        var content = DirectoryOverview ? FeedContent(story, title) : CompactContent(story, title, compactList);
+        var card = new Border { Child = content, Padding = new(compactList ? 8 : 11, 12), MinHeight = _vm.Prefs.CardLayout == "Compact" ? 92 : 132, CornerRadius = new(10) };
+        card.Classes.Add("storyCard");
+        var divider = Line(); divider.Margin = new(8, 8, 8, 0);
+        var outer = Stack(0, card, divider); outer.Margin = new(6, 0, 6, 0);
+        var menu = new ContextMenu();
+        foreach (var (label, action) in new (string, Action)[] { ("打开原文", () => OpenUrl(story.Url)), ("复制链接", () => Run(() => Clipboard?.SetTextAsync(story.Url ?? "") ?? Task.CompletedTask)), ("屏蔽关键词", () => Run(() => RuleDialog(new(RuleKind.KEYWORD, "")))), ("屏蔽作者", () => { if (story.Profile?.Id is { Length: > 0 } id) AddRule(new(RuleKind.AUTHOR, id, story.Author, Source: Source.HEYBOX)); }) }) { var item = new MenuItem { Header = T(label) }; item.Click += (_, _) => action(); menu.Items.Add(item); }
+        outer.ContextMenu = menu; return outer;
+    }
+    private Control FeedContent(Story story, TextBlock title)
+    {
+        var summary = Text(story.Excerpt, 15, muted: true);
+        summary.MaxLines = 3;
+        summary.TextTrimming = TextTrimming.CharacterEllipsis;
+        var feedDetail = Stack(8, title, summary);
+        var snapshot = _vm.Article?.Story.Key == story.Key ? _vm.Article : null;
+        if (story.Source == Source.HEYBOX || _vm.VisualFixture)
+        {
+            var comments = story.CommentCount is { } count ? " " + count : "";
+            var likes = snapshot?.LikeCount is { } likeCount ? " " + likeCount : "";
+            feedDetail.Children.Add(Row(5,
+                FeedAction("heart", T(snapshot?.Liked == true ? "已喜欢" : "喜欢") + likes, story, "like", snapshot?.Liked),
+                FeedAction("comment", T("评论") + comments, story, "comments"),
+                FeedAction("bookmark", T(snapshot?.Favorited == true ? "已收藏" : "收藏"), story, "favorite", snapshot?.Favorited)));
+        }
+        Control feedBody = feedDetail;
+        if (!_vm.Prefs.NoImages && story.Image != null)
+        {
+            var imageWidth = _vm.Prefs.CardLayout == "Gallery" ? 340 : 304;
+            feedBody = Columns($"{imageWidth},18,*", Picture(story.Image, 156), new Border(), feedDetail);
+        }
+        var game = story.Blocks?.FirstOrDefault(block => block.Kind == BlockKind.Game && block.AppId != null);
+        if (game != null && Bounds.Width >= 1180)
+        {
+            var link = AsyncButton("", () => _vm.NavigateAsync("news", game: new(game.AppId!.Value, game.Text, null)));
+            link.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+            var name = string.IsNullOrWhiteSpace(game.Text) ? $"AppID · {game.AppId}" : game.Text;
+            var label = Stack(6, Text(name, 15, true), Text("Steam", 13, muted: true));
+            var artwork = _vm.VisualFixture ? game.Url : $"https://cdn.akamai.steamstatic.com/steam/apps/{game.AppId}/header.jpg";
+            link.Content = _vm.Prefs.NoImages ? label : Columns("82,10,*", Picture(artwork, 70, 82), new Border(), label);
+            link.VerticalAlignment = VerticalAlignment.Center;
+            feedBody = Columns("*,18,245", feedBody, new Border(), link);
+        }
+        return Stack(8, Row(10, Avatar(_vm.Prefs.NoImages ? null : story.Profile?.Avatar, 30), Text(story.Author, 15, true), Text(story.Date, 12, muted: true)), feedBody);
+    }
+
+    private Button FeedAction(string icon, string label, Story story, string action, bool? displayedState = null)
+    {
+        var button = AsyncButton("", async () =>
+        {
+            SaveOffsets();
+            _showDetail = true;
+            await _vm.SelectAsync(story);
+            if (_vm.Article?.Story.Key != story.Key || !IsDirectoryPage) return;
+            Render();
+            if (_vm.IsArticleBlocked || _vm.DetailError.Length != 0) return;
+            if (action == "comments") SwitchComments(true);
+            else
+            {
+                var currentState = action == "like" ? _vm.Article.Liked : _vm.Article.Favorited;
+                if ((currentState == true) == (displayedState == true)) await Social(action, expectedStory: story.Key);
+            }
+        });
+        button.Content = Row(5, Icons.Get(icon, 16), Text(label, 13));
+        button.Padding = new(8, 3);
+        return button;
+    }
+
+    private Control CompactContent(Story story, TextBlock title, bool compactList)
+    {
         var author = Text(story.Author + " · " + story.Date, compactList ? 12.5 : 13.5, muted: true); author.MaxLines = 1; author.LineHeight = 18; author.MaxWidth = Math.Max(70, _vm.Prefs.ListWidth - (compactList ? 169 : 198)); author.TextTrimming = TextTrimming.CharacterEllipsis;
         var metadata = new Grid { ColumnDefinitions = new("Auto,Auto"), ColumnSpacing = 8 }; metadata.Children.Add(author);
         if (story.CommentCount != null) { var comments = Row(5, Icons.Get("comment", 14, "Muted"), Text(story.CommentCount.Value.ToString(), 13.5, muted: true)); Grid.SetColumn(comments, 1); metadata.Children.Add(comments); }
@@ -85,12 +156,6 @@ public sealed partial class MainWindow
             content = _vm.Prefs.CardLayout == "Gallery" ? Stack(12, Picture(story.Image, 158), detail) : Columns(compactList ? "94,12,*" : "100,16,*", Picture(story.Image, 68, compactList ? 94 : 100), new Border(), detail);
         }
         if (_vm.Prefs.CardLayout == "Comfortable") content = Stack(10, content, Text(story.Excerpt, 14, muted: true));
-        var card = new Border { Child = content, Padding = new(compactList ? 8 : 11, 12), MinHeight = _vm.Prefs.CardLayout == "Compact" ? 92 : 132, CornerRadius = new(10) };
-        card.Classes.Add("storyCard");
-        var divider = Line(); divider.Margin = new(8, 8, 8, 0);
-        var outer = Stack(0, card, divider); outer.Margin = new(6, 0, 6, 0);
-        var menu = new ContextMenu();
-        foreach (var (label, action) in new (string, Action)[] { ("打开原文", () => OpenUrl(story.Url)), ("复制链接", () => Run(() => Clipboard?.SetTextAsync(story.Url ?? "") ?? Task.CompletedTask)), ("屏蔽关键词", () => Run(() => RuleDialog(new(RuleKind.KEYWORD, "")))), ("屏蔽作者", () => { if (story.Profile?.Id is { Length: > 0 } id) AddRule(new(RuleKind.AUTHOR, id, story.Author, Source: Source.HEYBOX)); }) }) { var item = new MenuItem { Header = T(label) }; item.Click += (_, _) => action(); menu.Items.Add(item); }
-        outer.ContextMenu = menu; return outer;
+        return content;
     }
 }

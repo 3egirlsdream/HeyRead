@@ -52,7 +52,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private int _navigationVersion;
     private int _offset, _commentPage = 1; private string? _cursor; private bool _moreComments;
     public MainViewModel(HeyReadApi api, SteamService steam, LibraryStore store, ISessionStore sessions, ITranslationService translation) { Api = api; Steam = steam; Store = store; Sessions = sessions; _translation = translation; Comments.CollectionChanged += (_, _) => CommentsRevision++;
-        if (VisualFixture) { Prefs.ListWidth = Environment.GetEnvironmentVariable("HEYREAD_VISUAL_SCENE") == "reader" ? 335 : 432; Prefs.Theme = Environment.GetEnvironmentVariable("HEYREAD_VISUAL_THEME") ?? "Light"; Prefs.Accent = "Blue"; Prefs.BodySize = 17; Prefs.LineHeight = 24; Prefs.ParagraphSpacing = 14; Prefs.NoImages = false; Prefs.CardLayout = "Compact"; }
+        if (VisualFixture) { Prefs.ListWidth = Environment.GetEnvironmentVariable("HEYREAD_VISUAL_SCENE") == "reader" ? 335 : 432; Prefs.Theme = Environment.GetEnvironmentVariable("HEYREAD_VISUAL_THEME") ?? "Light"; Prefs.Accent = "Blue"; var defaults = new Preferences(); Prefs.BodySize = defaults.BodySize; Prefs.LineHeight = defaults.LineHeight; Prefs.ParagraphSpacing = defaults.ParagraphSpacing; Prefs.NoImages = false; Prefs.CardLayout = "Compact"; }
     }
     public async Task InitializeAsync()
     {
@@ -96,10 +96,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var source = forward ? _forward : _back; var destination = forward ? _back : _forward; if (source.Count == 0) return;
         RememberCurrent(); PushBounded(destination, CommittedNavigation()); await RestoreAsync(source.Pop());
     }
-    public async Task SearchAsync()
+    public Task SearchAsync() => SubmitSearchAsync(Page is "games" or "news");
+
+    public Task ReplaySearchAsync(SearchEntry entry)
     {
-        if (string.IsNullOrWhiteSpace(Query)) { await NavigateAsync("search"); return; }
-        Store.Search(Query.Trim(), SearchScope); await NavigateAsync(Page is "games" or "news" ? "games" : "search");
+        Query = entry.Query;
+        SearchScope = entry.Scope;
+        return SubmitSearchAsync(entry.Steam);
+    }
+
+    private async Task SubmitSearchAsync(bool steam)
+    {
+        Query = Query.Trim();
+        if (steam) SearchScope = null;
+        if (Query.Length > 0) Store.Search(Query, SearchScope, steam);
+        await NavigateAsync(steam ? "games" : "search");
     }
     public async Task LoadAsync(bool more = false)
     {

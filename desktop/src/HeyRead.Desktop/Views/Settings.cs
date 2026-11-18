@@ -25,11 +25,30 @@ public sealed partial class MainWindow
                 content.Children.Add(Group(Choice("内容卡片布局", ["Compact", "Comfortable", "Gallery"], p.CardLayout, x => p.CardLayout = x), Toggle("无图模式", p.NoImages, x => p.NoImages = x), Toggle("界面动画", p.Animations, x => p.Animations = x), Toggle("恢复导航", p.RestoreNavigation, x => p.RestoreNavigation = x))); break;
             case "reading":
                 content.Children.Add(Text(T("阅读排版与字体"), 24, true));
-                content.Children.Add(Group(Number("正文字号", 14, 26, p.BodySize, x => { p.BodySize = x; p.LineHeight = Math.Clamp(p.LineHeight, x * 1.2, x * 2.4); }), Number("行高", p.BodySize * 1.2, p.BodySize * 2.4, p.LineHeight, x => p.LineHeight = x), Number("段落间距", 8, 40, p.ParagraphSpacing, x => p.ParagraphSpacing = x)));
+                var sample = ReadingText(T("当我们把阅读的节奏放慢，文字之间的留白，也成为故事的一部分。"));
+                var second = ReadingText("A quiet space for your next story.");
+                void Preview()
+                {
+                    sample.FontSize = second.FontSize = p.BodySize;
+                    sample.LineHeight = second.LineHeight = p.LineHeight;
+                    second.Margin = new(0, p.ParagraphSpacing, 0, 0);
+                }
+                var lineHeight = NumberInput("行高", p.BodySize * 1.2, p.BodySize * 2.4, p.LineHeight, value => { p.LineHeight = value; Preview(); });
+                var bodySize = NumberInput("正文字号", 14, 26, p.BodySize, value =>
+                {
+                    p.BodySize = value;
+                    lineHeight.Maximum = (decimal)(value * 2.4);
+                    lineHeight.Minimum = (decimal)(value * 1.2);
+                    Preview();
+                });
+                var paragraph = NumberInput("段落间距", 8, 40, p.ParagraphSpacing, value => { p.ParagraphSpacing = value; Preview(); });
+                content.Children.Add(Group(Columns("*,Auto", Text(T("正文字号")), bodySize),
+                    Columns("*,Auto", Text(T("行高")), lineHeight), Columns("*,Auto", Text(T("段落间距")), paragraph)));
+                Preview();
                 var fonts = new[] { "System", "Sans", "Serif", "Mono" }.Concat(Directory.GetFiles(Path.Combine(_vm.Store.Root, "fonts")).Select(x => Path.GetFileName(x))).ToArray();
                 content.Children.Add(Group(Choice("正文字体", fonts, p.BodyFont, x => p.BodyFont = x), Choice("界面字体", fonts, p.UiFont, x => p.UiFont = x), AsyncButton(T("导入字体"), async () => { var files = await StorageProvider.OpenFilePickerAsync(new() { Title = T("导入字体"), FileTypeFilter = [new(T("字体")) { Patterns = ["*.ttf", "*.otf", "*.ttc"] }] }); if (files.Count > 0 && files[0].TryGetLocalPath() is { } path) { if (OperatingSystem.IsMacOS() && Native.InspectFont(path) == null) { await Notice(T("字体文件无效，请选择其他字体")); return; } p.BodyFont = _vm.Store.ImportFont(path); _vm.SaveSettings(); Render(); } })));
                 foreach (var font in fonts.Skip(4)) content.Children.Add(Row(12, Text(font), AsyncButton(T("移除字体"), async () => { if (await Confirm(T("移除字体"), F("移除 {0}？使用该字体的选项将恢复系统字体。", font))) { if (p.BodyFont == font) p.BodyFont = "System"; if (p.UiFont == font) p.UiFont = "System"; _vm.SaveSettings(); Render(); var path = Path.Combine(_vm.Store.Root, "fonts", font); _fontFamilies.Remove(path); Native.UnregisterFont(path); File.Delete(path); Render(); } })));
-                content.Children.Add(Group(Text(T("阅读预览"), 16, true), ReadingText("当我们把阅读的节奏放慢，文字之间的留白，也成为故事的一部分。\n\nA quiet space for your next story."))); break;
+                content.Children.Add(Group(Text(T("阅读预览"), 16, true), Stack(0, sample, second))); break;
             case "data":
                 content.Children.Add(Text(T("数据来源与缓存"), 24, true));
                 var gateway = new TextBox { Text = p.Gateway };
@@ -67,10 +86,10 @@ public sealed partial class MainWindow
         var combo = new ComboBox { ItemsSource = values.Select(x => new ChoiceOption(x, T(x))).ToArray(), SelectedIndex = Math.Max(0, Array.IndexOf(values, selected)), Width = 170 }; Avalonia.Automation.AutomationProperties.SetName(combo, T(label));
         combo.SelectionChanged += (_, _) => { if (combo.SelectedItem is ChoiceOption option && option.Value != selected) { set(option.Value); _vm.SaveSettings(); } }; var text = Text(T(label)); text.VerticalAlignment = VerticalAlignment.Center; return Columns("*,Auto", text, combo);
     }
-    private Control Number(string label, double min, double max, double value, Action<double> set)
+    private NumericUpDown NumberInput(string label, double min, double max, double value, Action<double> set)
     {
         var number = new NumericUpDown { Minimum = (decimal)min, Maximum = (decimal)max, Value = (decimal)value, Increment = 1, FormatString = "0.#", Width = 110 };
         Avalonia.Automation.AutomationProperties.SetName(number, T(label));
-        number.ValueChanged += (_, _) => { if (number.Value is { } v) { set((double)v); _vm.Store.SavePreferences(); } }; var text = Text(T(label)); text.VerticalAlignment = VerticalAlignment.Center; return Columns("*,Auto", text, number);
+        number.ValueChanged += (_, _) => { if (number.Value is { } v) { set((double)v); _vm.Store.SavePreferences(); } }; return number;
     }
 }

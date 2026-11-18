@@ -21,6 +21,45 @@ public static class TestAppBuilder { public static AppBuilder BuildAvaloniaApp()
 public sealed class AppTests
 {
     [AvaloniaFact]
+    public async Task CommentComposerRestoresDraftAfterSwitchingToArticleAndPostsToTheSelectedStory()
+    {
+        var root = Directory.CreateTempSubdirectory("heyread-composer-");
+        var store = new LibraryStore(root.FullName);
+        store.Preferences.NoImages = true;
+        var publicFeed = new FakeHandler("""{"status":"ok","result":{"links":[]}}""");
+        var account = new FakeHandler("""{"status":"ok","result":{"link":{"content":"<p>Article</p>"}}}""");
+        using var api = new HeyReadApi(publicFeed, account);
+        api.SetSession(new("pkey=test", "42", "Fixture", ""));
+        using var vm = new MainViewModel(api, new(api), store, new MemorySessionStore(), new NoTranslation());
+        var window = new MainWindow(vm);
+        try
+        {
+            window.Show();
+            await vm.SelectAsync(new Story("55", Source.HEYBOX, "Draft article", "Summary"));
+            vm.CommentsMode = true;
+            TextBox Editor()
+            {
+                window.UpdateLayout();
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                return window.GetVisualDescendants().OfType<TextBox>().Single(box => box.MaxLength == 10000);
+            }
+            Editor().Text = "saved thought";
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            vm.CommentsMode = false;
+            vm.CommentsMode = true;
+            Assert.Equal("saved thought", Editor().Text);
+            var send = window.GetVisualDescendants().OfType<Button>().Single(button => Equals(button.Content, "发送"));
+            send.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            for (var i = 0; i < 100 && !send.IsEnabled; ++i) await Task.Delay(10, TestContext.Current.CancellationToken);
+            var request = Assert.Single(account.Requests, r => r.Uri.AbsolutePath.EndsWith("/comment/create"));
+            Assert.Contains("link_id=55", request.Form);
+            Assert.Contains("text=saved", request.Form);
+            Assert.Empty(new LibraryStore(root.FullName).Drafts);
+        }
+        finally { window.Close(); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); root.Delete(true); }
+    }
+
+    [AvaloniaFact]
     public async Task WindowCanNavigateRepeatedlyAndChangeThemesWithoutReparenting()
     {
         var root = Path.Combine(Path.GetTempPath(), "heyread-test-" + Guid.NewGuid()); var store = new LibraryStore(root); store.Preferences.NoImages = true;

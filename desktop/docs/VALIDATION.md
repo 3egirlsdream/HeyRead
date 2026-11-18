@@ -28,3 +28,11 @@ Both local architectures produce self-contained .app and development DMG artifac
 - Actual account mutations (like/favorite/follow/comment/reply), including service-rejected sends. Protocol/state tests pass; real posting has not been claimed. Failed sends keep account-scoped drafts.
 - Completed Apple language installation and a successful translation, animated GIF timing, VoiceOver traversal and long-session memory profiling.
 - Exact A text metrics/quote position and generated icon differences; external system UI follows macOS.
+
+## 0.3.1 · 2026-11-18
+
+50 local tests passed. Coverage added for Steam and scoped Heybox search history replay and deletion across restart, and root comment draft restoration and submission through the window using a simulated signed-in account.
+
+Seven public integration checks passed on November 18: Heybox feed, search, article, official QR challenge and Steam name search, AppID search and announcements. The real-data check ran without an account.
+
+On Apple Silicon an isolated running app translated an English Steam sample with installed Apple Translation language resources. The Chinese output and the bilingual view were observed. At 900×640 the app opened an article, switched to comments and back to the body, then returned to the list. Live account writes and Intel GUI behavior remain unverified in this pass. Both architecture packages use ad hoc signing.

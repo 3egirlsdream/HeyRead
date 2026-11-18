@@ -85,13 +85,44 @@ public sealed partial class MainWindow
     private async Task ImageViewer(string[] urls, int start)
     {
         if (urls.Length == 0) return; var index = Math.Clamp(start, 0, urls.Length - 1); var window = Dialog("图片查看器", 1000, 740); window.MinWidth = 640; window.MinHeight = 440;
-        using var lifetime = new CancellationTokenSource(); var host = new ContentControl(); var status = Text(""); var scroll = new ScrollViewer { Content = host, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+        window.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
+        Ui.Brush(window, BackgroundProperty, "Surface");
+        using var lifetime = new CancellationTokenSource(); var host = new ContentControl(); var status = Text("");
+        var thumbnails = Row(6);
+        thumbnails.HorizontalAlignment = HorizontalAlignment.Center;
+        var scale = Text("100%", 13);
+        var scroll = new ScrollViewer { Content = host, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
         Bitmap? bitmap = null; string? local = null; double zoom = 1; bool fitted = true; CancellationTokenSource? load = null;
-        void Fit() { fitted = true; if (bitmap == null) return; host.Width = Math.Max(1, scroll.Bounds.Width - 16); host.Height = Math.Max(1, scroll.Bounds.Height - 16); if (host.Content is Image i) i.Stretch = Stretch.Uniform; zoom = Math.Min(host.Width / bitmap.PixelSize.Width, host.Height / bitmap.PixelSize.Height); }
+        void Fit() { fitted = true; if (bitmap == null) return; host.Width = Math.Max(1, scroll.Bounds.Width - 16); host.Height = Math.Max(1, scroll.Bounds.Height - 16); if (host.Content is Image i) i.Stretch = Stretch.Uniform; zoom = Math.Min(host.Width / bitmap.PixelSize.Width, host.Height / bitmap.PixelSize.Height); scale.Text = $"{zoom:P0}"; }
         scroll.SizeChanged += (_, _) => { if (fitted) Fit(); };
+        void ZoomBy(double multiplier)
+        {
+            if (bitmap == null) return;
+            fitted = false;
+            zoom = Math.Clamp(zoom * multiplier, 0.1, 8);
+            host.Width = bitmap.PixelSize.Width * zoom;
+            host.Height = bitmap.PixelSize.Height * zoom;
+            if (host.Content is Image image) image.Stretch = Stretch.Fill;
+            scale.Text = $"{zoom:P0}";
+        }
+        void UpdateThumbnails()
+        {
+            thumbnails.Children.Clear();
+            if (urls.Length < 2 || _vm.Prefs.NoImages) return;
+            int first = Math.Clamp(index - 2, 0, Math.Max(0, urls.Length - 5));
+            for (var i = first; i < Math.Min(first + 5, urls.Length); i++)
+            {
+                int item = i;
+                var choice = AsyncButton("", async () => { index = item; await Load(); }, index == item ? "primary" : null);
+                choice.Content = Picture(urls[i], 48, 80);
+                choice.Padding = new(3);
+                Avalonia.Automation.AutomationProperties.SetName(choice, $"{i + 1} / {urls.Length}");
+                thumbnails.Children.Add(choice);
+            }
+        }
         async Task Load()
         {
-            load?.Cancel(); load?.Dispose(); load = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); var token = load.Token; status.Text = T("正在加载…"); host.Content = null; bitmap?.Dispose(); bitmap = null; local = null;
+            load?.Cancel(); load?.Dispose(); load = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); var token = load.Token; status.Text = T("正在加载…"); UpdateThumbnails(); host.Content = null; bitmap?.Dispose(); bitmap = null; local = null;
             try
             {
                 var fetched = await _images.FetchAsync(urls[index], token); token.ThrowIfCancellationRequested(); var decoded = await Task.Run(() => ImageService.Decode(fetched, 2048), token); if (token.IsCancellationRequested) { decoded.Dispose(); return; } local = fetched; bitmap = decoded; var signature = new byte[6]; using (var source = File.OpenRead(local)) _ = source.Read(signature);
@@ -107,27 +138,28 @@ public sealed partial class MainWindow
             if (file != null) { await using var output = await file.OpenWriteAsync(); if (output.CanSeek) output.SetLength(0); await using var input = File.OpenRead(filePath); await input.CopyToAsync(output); }
         });
         var tools = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
-        foreach (var tool in new Control[] { AsyncButton(T("上一张"), async () => { index = (index - 1 + urls.Length) % urls.Length; await Load(); }), AsyncButton(T("下一张"), async () => { index = (index + 1) % urls.Length; await Load(); }), Button(T("适应窗口"), Fit), save, AsyncButton(T("分享"), async () =>
+        foreach (var tool in new Control[] { AsyncButton(T("上一张"), async () => { index = (index - 1 + urls.Length) % urls.Length; await Load(); }), AsyncButton(T("下一张"), async () => { index = (index + 1) % urls.Length; await Load(); }), status, Button(T("适应窗口"), Fit), Button(T("查看原图"), () => OpenUrl(urls[index])), save, AsyncButton(T("分享"), async () =>
         {
             var filePath = local; if (filePath == null) { Native.Share(urls[index]); return; }
             var directory = Path.Combine(_vm.Store.Root, "cache", "share"); Directory.CreateDirectory(directory);
             var destination = Path.Combine(directory, Path.GetFileName(filePath) + ImageService.Extension(filePath));
             await using (var input = File.OpenRead(filePath)) await using (var output = File.Create(destination)) await input.CopyToAsync(output);
             Native.Share(new Uri(destination).AbsoluteUri);
-        }), status }) tools.Children.Add(tool);
-        var grid = new Grid { RowDefinitions = new("Auto,*"), Margin = new(16), RowSpacing = 12 }; grid.Children.Add(tools); Grid.SetRow(scroll, 1); grid.Children.Add(scroll); window.Content = grid;
-        scroll.PointerWheelChanged += (_, e) => { if (bitmap == null || !e.KeyModifiers.HasFlag(KeyModifiers.Meta)) return; fitted = false; zoom = Math.Clamp(zoom * (e.Delta.Y > 0 ? 1.2 : 1 / 1.2), 0.1, 8); host.Width = bitmap.PixelSize.Width * zoom; host.Height = bitmap.PixelSize.Height * zoom; if (host.Content is Image i) i.Stretch = Stretch.Fill; e.Handled = true; };
+        }), Button("−", () => ZoomBy(1 / 1.2)), scale, Button("+", () => ZoomBy(1.2)) }) tools.Children.Add(tool);
+        var grid = new Grid { RowDefinitions = new("Auto,*,Auto"), Margin = new(16), RowSpacing = 12 }; grid.Children.Add(tools); Grid.SetRow(scroll, 1); grid.Children.Add(scroll); Grid.SetRow(thumbnails, 2); grid.Children.Add(thumbnails); window.Content = grid;
+        scroll.PointerWheelChanged += (_, e) => { if (bitmap == null || !e.KeyModifiers.HasFlag(KeyModifiers.Meta)) return; ZoomBy(e.Delta.Y > 0 ? 1.2 : 1 / 1.2); e.Handled = true; };
         window.KeyDown += async (_, e) => { if (e.Key == Key.Escape) window.Close(); if (e.Key is Key.Left or Key.Right) { index = (index + (e.Key == Key.Right ? 1 : urls.Length - 1)) % urls.Length; await Load(); } };
         window.Opened += async (_, _) => await Load(); window.Closed += (_, _) => { lifetime.Cancel(); load?.Cancel(); host.Content = null; bitmap?.Dispose(); }; await window.ShowDialog(this); load?.Dispose();
     }
     private async Task RepliesDialog(Comment root)
     {
-        var window = Dialog("楼中楼", 580, 560); var list = Stack(16, CommentView(root, true)); string? cursor = null; var seen = new HashSet<string> { root.Id };
+        var window = Dialog("楼中楼", 580, 560); var thread = new List<Comment> { root };
+        var list = Stack(16, CommentView(root, thread, true)); string? cursor = null; var seen = new HashSet<string> { root.Id };
         var more = new Button { Content = T("加载更多") }; var status = Text("", 12, muted: true);
         async Task Load()
         {
             more.IsEnabled = false;
-            try { var page = await _vm.RepliesAsync(root, cursor); foreach (var c in page.Items) if (seen.Add(c.Id)) list.Children.Add(CommentView(c, true)); more.IsVisible = page.HasMore && page.Cursor != cursor; cursor = page.Cursor; status.Text = ""; }
+            try { var page = await _vm.RepliesAsync(root, cursor); foreach (var c in page.Items) if (seen.Add(c.Id)) { thread.Add(c); list.Children.Add(CommentView(c, thread, true)); } more.IsVisible = page.HasMore && page.Cursor != cursor; cursor = page.Cursor; status.Text = ""; }
             catch (Exception e) { status.Text = e.Message; }
             finally { more.IsEnabled = true; }
         }

@@ -61,7 +61,15 @@ public sealed partial class MainWindow : Window
         _header.Content = BuildHeader(); main.Children.Add(_header); Grid.SetRow(_body, 1); main.Children.Add(_body);
         var statusBorder = Brush(new Border { Child = _status, Padding = new Thickness(20, 4), BorderThickness = new Thickness(0, 1, 0, 0) }, Border.BorderBrushProperty, "Line"); Grid.SetRow(statusBorder, 2); main.Children.Add(statusBorder);
         _list.ItemsSource = vm.Stories; _list.ItemTemplate = new FuncDataTemplate<Story>((s, _) => StoryRow(s!));
-        _list.SelectionChanged += async (_, _) => { if (_list.SelectedItem is Story story) { SaveOffsets(); _showDetail = true; await vm.SelectAsync(story); UpdateResponsive(); } };
+        _list.SelectionChanged += async (_, _) =>
+        {
+            if (_rendering || _list.SelectedItem is not Story story) return;
+            SaveOffsets();
+            _showDetail = true;
+            await vm.SelectAsync(story);
+            if (_overviewRows != DirectoryOverview) Render();
+            else UpdateResponsive();
+        };
         _readerScroll.ScrollChanged += (_, _) => { if (_rendering || vm.Article == null) return; if (vm.CommentsMode) _commentOffset = _readerScroll.Offset.Y; else _articleOffset = _readerScroll.Offset.Y; ScheduleViewportSave(); };
         _search.KeyDown += async (_, e) => { if (e.Key == Key.Enter) { SaveOffsets(); vm.Query = _search.Text ?? ""; _showDetail = false; await vm.SearchAsync(); e.Handled = true; } };
         _search.TextChanged += (_, _) => vm.Query = _search.Text ?? "";
@@ -90,6 +98,7 @@ public sealed partial class MainWindow : Window
             if (_vm.Page is "settings" or "account" or "games") { _readerScroll.Content = null; _readerContentIdentity = null; }
             if (_vm.Page == "settings") { _body.Content = BuildSettings(); return; }
             if (_vm.Page == "account") { _body.Content = BuildAccount(); return; }
+            if (_vm.Page == "search" && string.IsNullOrWhiteSpace(_vm.CurrentViewport.Query)) { _body.Content = BuildSearchLanding(); return; }
             if (_vm.Page == "games") { _body.Content = BuildGames(); return; }
             Detach(_listHeader); Detach(_list); Detach(_listFooter);
             _readingGrid.Children.Clear(); _readingGrid.ColumnDefinitions = new($"{Math.Clamp(_vm.Prefs.ListWidth, 280, 480)},1,*");
@@ -99,7 +108,17 @@ public sealed partial class MainWindow : Window
             var splitter = new GridSplitter { Width = 1, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Brushes.Transparent }; Grid.SetColumn(splitter, 1); _readingGrid.Children.Add(splitter);
             splitter.DragCompleted += (_, _) => { _vm.Prefs.ListWidth = Math.Clamp(_readingGrid.ColumnDefinitions[0].ActualWidth, 280, 480); _vm.SaveSettings(); };
             Grid.SetColumn(_detail, 2); _readingGrid.Children.Add(_detail); _body.Content = _readingGrid;
-            _listHeader.Content = BuildListHeader(); _listFooter.Content = BuildListFooter(); if (_vm.VisualFixture && _vm.Article != null && _list.SelectedItem == null) _list.SelectedItem = _vm.Stories.FirstOrDefault(x => x.Key == _vm.Article.Story.Key); RenderReader(); UpdateResponsive();
+            if (_overviewRows != DirectoryOverview)
+            {
+                _overviewRows = DirectoryOverview;
+                _list.ItemTemplate = new FuncDataTemplate<Story>((story, _) => StoryRow(story));
+            }
+            _listHeader.Content = BuildListHeader();
+            _listFooter.Content = BuildListFooter();
+            if (_vm.VisualFixture && !DirectoryOverview && (_showDetail || Bounds.Width >= 1120) && _vm.Article != null && _list.SelectedItem == null)
+                _list.SelectedItem = _vm.Stories.FirstOrDefault(x => x.Key == _vm.Article.Story.Key);
+            RenderReader();
+            UpdateResponsive();
             _status.Text = _vm.Loading ? T("正在加载…") : _vm.Demo ? "离线演示内容 · 不代表在线资讯" : $"{_vm.Stories.Count} 篇内容" + (_vm.BlockedCount > 0 ? $" · 已屏蔽 {_vm.BlockedCount} 篇" : "");
         }
         finally
@@ -121,8 +140,15 @@ public sealed partial class MainWindow : Window
         if (_vm.Page is "history" or "cloudhistory") children.Children.Add(Row(6, AsyncButton(T("本机历史"), () => Navigate("history"), _vm.Page == "history" ? "primary" : null), AsyncButton(T("账号历史"), () => Navigate("cloudhistory"), _vm.Page == "cloudhistory" ? "primary" : null)));
         if (_vm.Page == "following")
         {
-            var authors = new ComboBox { ItemsSource = _vm.Following, SelectedItem = _vm.FollowingFilter ?? _vm.Following.FirstOrDefault(), HorizontalAlignment = HorizontalAlignment.Stretch, ItemTemplate = new FuncDataTemplate<Author>((a, _) => Text(T(a?.Name ?? ""))) };
-            authors.SelectionChanged += (_, _) => { var chosen = authors.SelectedItem as Author; if (!_vm.Loading && chosen != _vm.FollowingFilter) { _vm.FollowingFilter = chosen; _vm.ApplyFilter(); } }; children.Children.Add(authors);
+            var authors = Row(6);
+            foreach (var author in _vm.Following)
+            {
+                var filter = Button("", () => { _vm.FollowingFilter = author; _vm.ApplyFilter(); },
+                    (_vm.FollowingFilter?.Id ?? "") == author.Id ? "selected" : "flat");
+                filter.Content = Row(6, Avatar(_vm.Prefs.NoImages ? null : author.Avatar, 26), Text(T(author.Name), 13));
+                authors.Children.Add(filter);
+            }
+            children.Children.Add(new ScrollViewer { Content = authors, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
         }
         if (_vm.Page == "favorites") { var combo = new ComboBox { ItemsSource = _vm.Folders, ItemTemplate = new FuncDataTemplate<Folder>((f, _) => Text(T(f?.Name ?? ""))), SelectedItem = _vm.Folder ?? _vm.Folders.FirstOrDefault(), HorizontalAlignment = HorizontalAlignment.Stretch }; combo.SelectionChanged += async (_, _) => { if (!_vm.Loading && combo.SelectedItem is Folder f && f != _vm.Folder) { _vm.Folder = f; await _vm.LoadAsync(); } }; children.Children.Add(combo); }
         if (_vm.Page == "search")
@@ -132,10 +158,11 @@ public sealed partial class MainWindow : Window
         }
         if (_vm.Page == "destination" && _vm.Target is { } target)
         {
+            if (target.Kind is "author" or "topic" && !_vm.Prefs.NoImages) children.Children.Add(Cover(target.Kind == "topic" ? 105 : 134));
             children.Children.Add(Text(_vm.AuthorPage?.Author.Name is { Length: > 0 } name ? name : target.Name, 18, true));
             if (_vm.AuthorPage is { } author) { children.Children.Add(Text(author.Bio, 12, muted: true)); children.Children.Add(Text(F("{0} 关注 · {1} 粉丝 · {2} 获赞", author.Following?.ToString() ?? "—", author.Followers?.ToString() ?? "—", author.Likes?.ToString() ?? "—"), 11, muted: true)); }
             if (target.Kind == "author") children.Children.Add(Row(6, AsyncButton(T("文章"), async () => { _vm.AuthorMoments = false; await _vm.LoadAsync(); }, !_vm.AuthorMoments ? "primary" : "flat"), AsyncButton(T("动态"), async () => { _vm.AuthorMoments = true; await _vm.LoadAsync(); }, _vm.AuthorMoments ? "primary" : "flat")));
-            children.Children.Add(Row(6, AsyncButton(T("在此搜索"), async () => { _vm.SearchScope = target.Kind == "author" ? null : target; await _vm.NavigateAsync("search"); }), AsyncButton(T("屏蔽"), async () => { var kind = target.Kind switch { "author" => RuleKind.AUTHOR, "section" => RuleKind.SECTION, _ => RuleKind.TOPIC }; AddRule(new(kind, target.Id, target.Name, Source: Source.HEYBOX)); await Task.CompletedTask; })));
+            children.Children.Add(Row(6, AsyncButton(T("在此搜索"), async () => { _vm.SearchScope = target.Kind == "author" ? null : target; _vm.Query = ""; await _vm.NavigateAsync("search"); }), AsyncButton(T("屏蔽"), async () => { var kind = target.Kind switch { "author" => RuleKind.AUTHOR, "section" => RuleKind.SECTION, _ => RuleKind.TOPIC }; AddRule(new(kind, target.Id, target.Name, Source: Source.HEYBOX)); await Task.CompletedTask; })));
         }
         if (_vm.BlockedCount > 0 || _vm.Reveal) children.Children.Add(Button(T("显示已屏蔽内容"), () => _vm.Reveal = !_vm.Reveal, "flat"));
         return children;
@@ -151,7 +178,7 @@ public sealed partial class MainWindow : Window
         }
         else if (_vm.Loading) stack.Children.Add(new ProgressBar { IsIndeterminate = true, Height = 3 });
         else if (_vm.HasMore) stack.Children.Add(AsyncButton(T("加载更多"), () => _vm.LoadAsync(true)));
-        else if (_vm.Stories.Count == 0) { stack.Children.Add(Text(T("暂无内容"), 14, muted: true)); if (_vm.Page == "search") stack.Children.Add(SearchHistory()); }
+        else if (_vm.Stories.Count == 0) stack.Children.Add(Text(T("暂无内容"), 14, muted: true));
         return stack;
     }
     private Control BuildListSkeleton()
@@ -229,7 +256,7 @@ public sealed partial class MainWindow : Window
         if (_nativeMenu != null) { foreach (var (item, key) in _menuLabels) item.Header = T(key); return; }
         var root = new NativeMenu(); _nativeMenu = root;
         var navigation = new NativeMenu();
-        foreach (var (label, page) in new[] { ("发现", "discover"), ("推荐动态", "dynamic"), ("关注动态", "following"), ("Steam 游戏", "games"), ("云端收藏", "favorites"), ("本机历史", "history"), ("设置", "settings") }) { var item = new NativeMenuItem { Header = T(label) }; item.Click += (_, _) => Run(() => Navigate(page)); navigation.Items.Add(item); _menuLabels.Add((item, label)); }
+        foreach (var (label, page) in new[] { ("发现", "discover"), ("推荐动态", "dynamic"), ("关注动态", "following"), ("Steam 游戏", "games"), ("云端收藏", "favorites"), ("本机历史", "history"), ("搜索记录", "search"), ("设置", "settings") }) { var item = new NativeMenuItem { Header = T(label) }; item.Click += (_, _) => Run(async () => { if (page == "search") _vm.Query = ""; await Navigate(page); }); navigation.Items.Add(item); _menuLabels.Add((item, label)); }
         root.Items.Add(new NativeMenuItem { Header = T("浏览"), Menu = navigation });
         var reading = new NativeMenu(); var original = new NativeMenuItem { Header = T("打开原文") }; original.Click += (_, _) => OpenUrl(_vm.Article?.Story.Url); reading.Items.Add(original); _menuLabels.Add((original, "打开原文")); var translate = new NativeMenuItem { Header = T("翻译为中文") }; translate.Click += (_, _) => Run(_vm.TranslateAsync); reading.Items.Add(translate); _menuLabels.Add((translate, "翻译为中文")); root.Items.Add(new NativeMenuItem { Header = T("阅读"), Menu = reading });
         foreach (var item in root.Items.OfType<NativeMenuItem>()) { if (item.Header is { } label) _menuLabels.Add((item, item.Menu == navigation ? "浏览" : "阅读")); foreach (var child in item.Menu?.Items.OfType<NativeMenuItem>() ?? []) if (!_menuLabels.Any(x => x.Item == child) && child.Header is { } childLabel) _menuLabels.Add((child, childLabel.ToString()!)); }
@@ -248,43 +275,49 @@ public sealed partial class MainWindow : Window
     private void SwitchComments(bool value) { if (_vm.CommentsMode == value) return; SaveOffsets(); _vm.CommentsMode = value; Render(); }
     private Control BuildComments()
     {
-        var stack = Stack(18); stack.Margin = new(30, 22); stack.Children.Add(Text(T("评论"), 22, true));
+        var stack = Stack(14); stack.Margin = new(20, 18);
+        stack.Children.Add(Text(_vm.Article?.Story.Title ?? T("评论"), 24, true));
+        stack.Children.Add(Row(12, Button(T("正文"), () => SwitchComments(false), "flat"), Brush(Text(T("评论") + " " + (_vm.Article?.CommentCount ?? _vm.Comments.Count), 16, true), TextBlock.ForegroundProperty, "Accent")));
+        stack.Children.Add(Line());
         if (_vm.Comments.Count == 0) stack.Children.Add(Text(_vm.Api.Session == null ? "登录后查看完整评论" : T("暂无内容"), 13, muted: true));
-        foreach (var c in _vm.Comments) stack.Children.Add(CommentView(c));
+        var gallery = _vm.Comments.SelectMany(comment => new[] { comment }.Concat(comment.Replies)).ToArray();
+        foreach (var c in _vm.Comments) stack.Children.Add(CommentView(c, gallery));
         if (_vm.CommentsError.Length > 0) stack.Children.Add(Text(T(_vm.CommentsError), 13));
         if (_vm.MoreComments || _vm.CommentsError.Length > 0) stack.Children.Add(AsyncButton(T("加载更多"), _vm.MoreCommentsAsync)); return stack;
     }
-    private Control CommentView(Comment c, bool reply = false)
+    private Task OpenCommentImage(IReadOnlyList<Comment> thread, Comment selected, int index)
+    {
+        var offset = 0;
+        foreach (var comment in thread)
+        {
+            if (ReferenceEquals(comment, selected)) break;
+            offset += comment.Images.Count;
+        }
+        return ImageViewer(thread.SelectMany(comment => comment.Images).ToArray(), offset + index);
+    }
+    private Control CommentView(Comment c, IReadOnlyList<Comment> gallery, bool reply = false)
     {
         var name = Button(c.Author.Name, () => { if (c.Author.Id.Length > 0) Run(() => _vm.NavigateAsync("destination", new("author", c.Author.Id, c.Author.Name))); }, "flat"); name.Padding = new(0);
         var body = Stack(8, Row(8, name, Text(c.Date, 11, muted: true)), RichText(new(BlockKind.Paragraph, c.Text)));
-        if (!_vm.Prefs.NoImages) foreach (var url in c.Images) { var image = new RemoteImage(_images, url, 150); image.Tapped += (_, _) => Run(() => ImageViewer(c.Images.ToArray(), Array.IndexOf(c.Images.ToArray(), url))); body.Children.Add(image); }
+        for (var i = 0; i < c.Images.Count; i++)
+        {
+            var index = i;
+            if (_vm.Prefs.NoImages)
+                body.Children.Add(AsyncButton(T("图片 · 点击查看"), () => OpenCommentImage(gallery, c, index), "flat"));
+            else
+            {
+                var image = new RemoteImage(_images, c.Images[i], 150);
+                image.Tapped += (_, _) => Run(() => OpenCommentImage(gallery, c, index));
+                body.Children.Add(image);
+            }
+        }
         var supported = c.Supported; var supports = c.Supports; Button? support = null;
         support = AsyncButton($"{(supported ? "✓" : "↑")} {supports}", async () => { if (_vm.Api.Session == null) { await LoginDialog(); if (_vm.Api.Session == null) return; } try { await _vm.SocialAsync("support", c with { Supported = supported, Supports = supports }); supported = !supported; supports = Math.Max(0, supports + (supported ? 1 : -1)); support!.Content = $"{(supported ? "✓" : "↑")} {supports}"; } catch (Exception e) { await Notice(e.Message); } }, "flat");
         body.Children.Add(Row(8, AsyncButton(T("回复"), () => CommentDialog(c), "flat"), support));
-        if (!reply) { foreach (var child in c.Replies) body.Children.Add(CommentView(child, true)); body.Children.Add(AsyncButton(T("查看楼中楼"), async () => { await RepliesDialog(c); }, "flat")); }
-        var border = Brush(new Border { Child = body, Padding = new(reply ? 16 : 0, 0, 0, 18), BorderThickness = new(0, 0, 0, 1) }, Border.BorderBrushProperty, "Line"); return border;
+        if (!reply) { foreach (var child in c.Replies) body.Children.Add(CommentView(child, gallery, true)); body.Children.Add(AsyncButton(T("查看楼中楼"), async () => { await RepliesDialog(c); }, "flat")); }
+        var border = Brush(new Border { Child = Columns("32,12,*", Avatar(_vm.Prefs.NoImages ? null : c.Author.Avatar, 32), new Border(), body), Padding = new(reply ? 16 : 0, 0, 0, 18), BorderThickness = new(0, 0, 0, 1) }, Border.BorderBrushProperty, "Line"); return border;
     }
     private Control EmptyReader() => new Border { Child = Stack(12, Icons.Get("book_open", 40), Text(T("选择一篇文章开始阅读"), 16, muted: true)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-    private Control SearchHistory()
-    {
-        var s = Stack(8, Text(T("搜索记录"), 14, true)); foreach (var h in _vm.Store.Searches.Take(12)) s.Children.Add(AsyncButton(h.Query + (h.Scope == null ? "" : $" · {h.Scope.Name}"), async () => { _vm.Query = h.Query; _search.Text = h.Query; _vm.SearchScope = h.Scope; await _vm.SearchAsync(); }, "flat"));
-        s.Children.Add(Button(T("清除记录"), () => { _vm.Store.ClearSearches(); Render(); }, "flat")); return s;
-    }
-    private Control BuildGames()
-    {
-        var s = Stack(18, Text(T("Steam 游戏"), 24, true), Text(T("输入游戏名称或 AppID，浏览 Steam 社区公告。"), 13, muted: true)); s.Margin = new(32);
-        if (_vm.Loading) s.Children.Add(new ProgressBar { IsIndeterminate = true, Height = 3 }); if (_vm.Error.Length > 0) s.Children.Add(Group(Text(T(_vm.Error)), AsyncButton(T("重试"), () => _vm.LoadAsync())));
-        foreach (var game in _vm.Games) { var b = AsyncButton("", async () => { _showDetail = false; await _vm.NavigateAsync("news", game: game); }); b.HorizontalContentAlignment = HorizontalAlignment.Stretch; b.Content = Row(16, new RemoteImage(_images, game.Image, 64) { Width = 140 }, Stack(6, Text(game.Name, 16, true), Text($"AppID {game.AppId}", 12, muted: true))); s.Children.Add(b); }
-        if (_vm.Games.Count == 0 && !_vm.Loading) s.Children.Add(SearchHistory()); return new ScrollViewer { Content = s };
-    }
-    private Control BuildAccount()
-    {
-        var s = Stack(24, Text(T("账号概览"), 25, true), Group(Text(_vm.AccountName, 18, true), Text(_vm.Api.Session == null ? T("扫码登录以同步小黑盒账号内容") : $"Heybox ID · {_vm.Api.Session.UserId}", 13, muted: true))); s.Margin = new(36); s.MaxWidth = 740;
-        if (_vm.Api.Session == null) s.Children.Add(AsyncButton(T("登录小黑盒"), LoginDialog, "primary"));
-        else { s.Children.Add(Group(AsyncButton(T("云端收藏"), () => Navigate("favorites")), AsyncButton(T("账号历史"), () => Navigate("cloudhistory")), AsyncButton(T("关注动态"), () => Navigate("following")))); s.Children.Add(AsyncButton(T("退出登录"), async () => { if (await Confirm(T("退出登录"), "退出当前账号？本机历史与阅读偏好会保留。")) { _vm.Logout(); Render(); } })); }
-        return new ScrollViewer { Content = s };
-    }
     private CancellationTokenSource? _navigationMotion;
     private void AnimateNavigation()
     {
@@ -319,11 +352,31 @@ public sealed partial class MainWindow : Window
     }
     private static double Linear(byte channel) { var value = channel / 255.0; return value <= .04045 ? value / 12.92 : Math.Pow((value + .055) / 1.055, 2.4); }
     private void OnSystemColorsChanged(object? sender, Avalonia.Platform.PlatformColorValues e) => Dispatcher.UIThread.Post(ApplyTheme);
+    private bool IsDirectoryPage => _vm.Page is "dynamic" or "following" || _vm.Page == "destination" && _vm.Target?.Kind == "author";
+    private bool DirectoryOverview => IsDirectoryPage && !_showDetail;
+    private bool _overviewRows;
+    private void ReturnToList()
+    {
+        SaveOffsets();
+        _showDetail = false;
+        _list.SelectedItem = null;
+        Render();
+    }
     private void UpdateResponsive()
     {
         _narrow = Bounds.Width < 1120;
         if (_vm.Page is "settings" or "account" or "games") return;
         if (_readingGrid.Children.Count < 3) return;
+        if (DirectoryOverview)
+        {
+            _readingGrid.ColumnDefinitions[0].Width = new(1, GridUnitType.Star);
+            _readingGrid.ColumnDefinitions[1].Width = new(0);
+            _readingGrid.ColumnDefinitions[2].Width = new(0);
+            _readingGrid.Children[0].IsVisible = true;
+            _readingGrid.Children[1].IsVisible = false;
+            _detail.IsVisible = false;
+            return;
+        }
         var list = _readingGrid.Children[0]; var splitter = _readingGrid.Children[1];
         list.IsVisible = !_narrow || !_showDetail; splitter.IsVisible = !_narrow; _detail.IsVisible = !_narrow || _showDetail;
         _readingGrid.ColumnDefinitions[0].Width = _narrow ? _showDetail ? new(0) : new(1, GridUnitType.Star) : new(Math.Clamp(_vm.Prefs.ListWidth, 280, 480));
@@ -357,13 +410,13 @@ public sealed partial class MainWindow : Window
         if (e.PropertyName == nameof(_vm.Toast) && _vm.Toast.Length > 0) _notifications?.Show(new Notification(ProductInfo.DisplayName, T(_vm.Toast), NotificationType.Information, TimeSpan.FromSeconds(4)));
         if (e.PropertyName is nameof(_vm.Loading) or nameof(_vm.DetailLoading) or nameof(_vm.CommentsMode) or nameof(_vm.Translating)) Render();
     }
-    private async Task Social(string action, Comment? comment = null) { if (_vm.VisualFixture) { _vm.Toast = "离线样例不执行账号操作"; return; } if (_vm.Api.Session == null) { await LoginDialog(); if (_vm.Api.Session == null) return; } try { await _vm.SocialAsync(action, comment); } catch (Exception e) { await Notice(e.Message); } }
+    private async Task Social(string action, Comment? comment = null, string? expectedStory = null) { if (_vm.VisualFixture) { _vm.Toast = "离线样例不执行账号操作"; return; } if (_vm.Api.Session == null) { await LoginDialog(); if (_vm.Api.Session == null) return; } if (expectedStory != null && _vm.Article?.Story.Key != expectedStory) return; try { await _vm.SocialAsync(action, comment); } catch (Exception e) { await Notice(e.Message); } }
     private async void Run(Func<Task> action) { try { await action(); } catch (OperationCanceledException) { } catch (Exception e) { Console.Error.WriteLine(e); _status.Text = e.Message; await Notice(e.Message); } }
     private void OpenUrl(string? url) { if (J.Https(url) != null) Run(async () => { await Launcher.LaunchUriAsync(new Uri(url!)); }); }
     private void Verify() => Native.Verify(_vm.Article?.Story.Url ?? "https://www.xiaoheihe.cn/");
     private void OnKeys(object? sender, KeyEventArgs e)
     {
         if (e.KeyModifiers.HasFlag(KeyModifiers.Meta)) { switch (e.Key) { case Key.W: Close(); e.Handled = true; break; case Key.F: _search.Focus(); e.Handled = true; break; case Key.R: Run(() => _vm.LoadAsync()); e.Handled = true; break; case Key.OemComma: Run(() => Navigate("settings")); e.Handled = true; break; case Key.Left: Run(async () => { SaveOffsets(); await _vm.BackAsync(); }); e.Handled = true; break; case Key.Right: Run(async () => { SaveOffsets(); await _vm.BackAsync(true); }); e.Handled = true; break; } }
-        if (e.Key == Key.Escape && _narrow && _showDetail) { _showDetail = false; UpdateResponsive(); e.Handled = true; }
+        if (e.Key == Key.Escape && (_narrow || IsDirectoryPage) && _showDetail) { ReturnToList(); e.Handled = true; }
     }
 }
