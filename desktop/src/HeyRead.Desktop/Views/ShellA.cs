@@ -45,7 +45,8 @@ public sealed partial class MainWindow
     }
     private Control Avatar(string? url, double size)
     {
-        var content = url == null ? (Control)Icons.Get("person", size * .6, "Muted") : Picture(url, size, size);
+        var artwork = _vm.VisualFixture && url == "design:account" && size > 32 ? "design:account-large" : url;
+        var content = artwork == null ? (Control)Icons.Get("person", size * .6, "Muted") : Picture(artwork, size, size);
         return Brush(new Border { Child = content, Width = size, Height = size, CornerRadius = new(size / 2), ClipToBounds = true }, Border.BackgroundProperty, "Subtle");
     }
     private void RenderSidebar()
@@ -76,50 +77,84 @@ public sealed partial class MainWindow
         if (story == null) return new Border();
         var compactList = _vm.Prefs.ListWidth < 380;
         var title = Text(story.Title, 16, true); title.MaxLines = ReaderWidth < 700 && _vm.Prefs.ListWidth >= 400 ? 1 : 2; title.LineHeight = 21; title.TextTrimming = TextTrimming.CharacterEllipsis; ToolTip.SetTip(title, story.Title);
-        var content = DirectoryOverview ? FeedContent(story, title) : CompactContent(story, title, compactList);
+        var more = DirectoryOverview ? new Button { Content = Icons.Get("more_horizontal", 20), Width = 32, Height = 32, Padding = new(4) } : null;
+        var content = more != null ? FeedContent(story, title, more) : CompactContent(story, title, compactList);
         var card = new Border { Child = content, Padding = new(compactList ? 8 : 11, 12), MinHeight = _vm.Prefs.CardLayout == "Compact" ? 92 : 132, CornerRadius = new(10) };
+        if (DirectoryOverview) card.Padding = new(10, 6, 0, 10);
         card.Classes.Add("storyCard");
         var divider = Line(); divider.Margin = new(8, 8, 8, 0);
-        var outer = Stack(0, card, divider); outer.Margin = new(6, 0, 6, 0);
+        var outer = Stack(0, card, divider); outer.Margin = DirectoryOverview ? new(14, 0, 18, 0) : new(6, 0, 6, 0);
         var menu = new ContextMenu();
         foreach (var (label, action) in new (string, Action)[] { ("打开原文", () => OpenUrl(story.Url)), ("复制链接", () => Run(() => Clipboard?.SetTextAsync(story.Url ?? "") ?? Task.CompletedTask)), ("屏蔽关键词", () => Run(() => RuleDialog(new(RuleKind.KEYWORD, "")))), ("屏蔽作者", () => { if (story.Profile?.Id is { Length: > 0 } id) AddRule(new(RuleKind.AUTHOR, id, story.Author, Source: Source.HEYBOX)); }) }) { var item = new MenuItem { Header = T(label) }; item.Click += (_, _) => action(); menu.Items.Add(item); }
-        outer.ContextMenu = menu; return outer;
+        outer.ContextMenu = menu;
+        if (more != null)
+        {
+            more.Classes.Add("flat");
+            Avalonia.Automation.AutomationProperties.SetName(more, T("更多操作"));
+            ToolTip.SetTip(more, T("更多操作"));
+            more.Click += (_, _) => menu.Open(more);
+        }
+        return outer;
     }
-    private Control FeedContent(Story story, TextBlock title)
+    private Control FeedContent(Story story, TextBlock title, Button more)
     {
-        var summary = Text(story.Excerpt, 15, muted: true);
+        title.FontSize = 20;
+        title.LineHeight = 25;
+        var summary = Text(story.Excerpt, 16);
+        summary.LineHeight = 21;
         summary.MaxLines = 3;
         summary.TextTrimming = TextTrimming.CharacterEllipsis;
-        var feedDetail = Stack(8, title, summary);
+        var feedDetail = Stack(6, title, summary);
+        var read = Button("", () => Run(async () =>
+        {
+            SaveOffsets();
+            _showDetail = true;
+            await _vm.SelectAsync(story);
+            Render();
+        }), "flat");
+        var readLabel = Brush(Text(T("正文") + " · " + story.Title, 14, true), TextBlock.ForegroundProperty, "Accent");
+        readLabel.MaxLines = 1;
+        readLabel.TextTrimming = TextTrimming.CharacterEllipsis;
+        read.Content = Brush(new Border { Child = readLabel, Padding = new(9, 0, 0, 0), BorderThickness = new(3, 0, 0, 0) }, Border.BorderBrushProperty, "Accent");
+        read.HorizontalContentAlignment = HorizontalAlignment.Left;
+        read.MinHeight = 23;
+        read.Padding = new(0);
+        feedDetail.Children.Add(read);
         var snapshot = _vm.Article?.Story.Key == story.Key ? _vm.Article : null;
         if (story.Source == Source.HEYBOX || _vm.VisualFixture)
         {
             var comments = story.CommentCount is { } count ? " " + count : "";
             var likes = snapshot?.LikeCount is { } likeCount ? " " + likeCount : "";
-            feedDetail.Children.Add(Row(5,
+            feedDetail.Children.Add(new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 10, LineSpacing = 4, Children = {
                 FeedAction("heart", T(snapshot?.Liked == true ? "已喜欢" : "喜欢") + likes, story, "like", snapshot?.Liked),
                 FeedAction("comment", T("评论") + comments, story, "comments"),
-                FeedAction("bookmark", T(snapshot?.Favorited == true ? "已收藏" : "收藏"), story, "favorite", snapshot?.Favorited)));
+                FeedAction("bookmark", T(snapshot?.Favorited == true ? "已收藏" : "收藏"), story, "favorite", snapshot?.Favorited) } });
         }
         Control feedBody = feedDetail;
         if (!_vm.Prefs.NoImages && story.Image != null)
         {
-            var imageWidth = _vm.Prefs.CardLayout == "Gallery" ? 340 : 304;
-            feedBody = Columns($"{imageWidth},18,*", Picture(story.Image, 156), new Border(), feedDetail);
+            var imageWidth = _vm.Prefs.CardLayout == "Gallery" ? 340 : 310;
+            var artwork = _vm.VisualFixture && story.Image is "design:1" or "design:2" or "design:5" ? story.Image + "-feed" : story.Image;
+            feedBody = Columns($"{imageWidth},22,*", Picture(artwork, 160), new Border(), feedDetail);
         }
         var game = story.Blocks?.FirstOrDefault(block => block.Kind == BlockKind.Game && block.AppId != null);
         if (game != null && Bounds.Width >= 1180)
         {
             var link = AsyncButton("", () => _vm.NavigateAsync("news", game: new(game.AppId!.Value, game.Text, null)));
             link.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+            link.Padding = new(12);
+            link.MinHeight = 110;
+            Brush(link, Avalonia.Controls.Button.BackgroundProperty, "Subtle");
             var name = string.IsNullOrWhiteSpace(game.Text) ? $"AppID · {game.AppId}" : game.Text;
-            var label = Stack(6, Text(name, 15, true), Text("Steam", 13, muted: true));
-            var artwork = _vm.VisualFixture ? game.Url : $"https://cdn.akamai.steamstatic.com/steam/apps/{game.AppId}/header.jpg";
-            link.Content = _vm.Prefs.NoImages ? label : Columns("82,10,*", Picture(artwork, 70, 82), new Border(), label);
+            var label = Stack(8, Text(name, 16, true), Text("Steam", 14, muted: true));
+            label.VerticalAlignment = VerticalAlignment.Center;
+            var artwork = _vm.VisualFixture && game.Url == "design:game" ? "design:feed-game" : $"https://cdn.akamai.steamstatic.com/steam/apps/{game.AppId}/header.jpg";
+            link.Content = _vm.Prefs.NoImages ? label : Columns("90,14,*,16", Picture(artwork, 86, 90), new Border(), label, Icons.Get("chevron_right", 15, "Muted"));
             link.VerticalAlignment = VerticalAlignment.Center;
-            feedBody = Columns("*,18,245", feedBody, new Border(), link);
+            feedBody = Columns("*,18,304", feedBody, new Border(), link);
         }
-        return Stack(8, Row(10, Avatar(_vm.Prefs.NoImages ? null : story.Profile?.Avatar, 30), Text(story.Author, 15, true), Text(story.Date, 12, muted: true)), feedBody);
+        var byline = Row(12, Avatar(_vm.Prefs.NoImages ? null : story.Profile?.Avatar, 36), Text(story.Author, 17, true), Text(story.Date, 14, muted: true));
+        return Stack(8, Columns("*,32", byline, more), feedBody);
     }
 
     private Button FeedAction(string icon, string label, Story story, string action, bool? displayedState = null)
@@ -139,7 +174,8 @@ public sealed partial class MainWindow
                 if ((currentState == true) == (displayedState == true)) await Social(action, expectedStory: story.Key);
             }
         });
-        button.Content = Row(5, Icons.Get(icon, 16), Text(label, 13));
+        button.Content = Row(7, Icons.Get(icon, 18), Text(label, 14));
+        button.MinWidth = action == "favorite" ? 94 : 110;
         button.Padding = new(8, 3);
         return button;
     }

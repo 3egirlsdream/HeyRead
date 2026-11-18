@@ -29,4 +29,30 @@
 <Style Selector="ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="Transparent"/></Style><Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="Transparent"/></Style>
 <Style Selector="ListBoxItem:pointerover Border.storyCard"><Setter Property="Background" Value="{DynamicResource Subtle}"/></Style><Style Selector="ListBoxItem:selected Border.storyCard"><Setter Property="Background" Value="{DynamicResource Selection}"/></Style>
 <Style Selector="Border.group"><Setter Property="Background" Value="{DynamicResource Subtle}"/><Setter Property="CornerRadius" Value="10"/><Setter Property="Padding" Value="16"/><Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/></Style>
+<Style Selector="Button.sectionTab">
+  <Setter Property="MinWidth" Value="74"/><Setter Property="Height" Value="36"/>
+  <Setter Property="Padding" Value="12,3"/><Setter Property="FontSize" Value="16"/>
+</Style>
+<Style Selector="Button.readerSegment">
+  <Setter Property="Height" Value="26"/><Setter Property="MinHeight" Value="26"/>
+  <Setter Property="MinWidth" Value="65"/><Setter Property="Padding" Value="9,0"/>
+  <Setter Property="FontSize" Value="15"/><Setter Property="CornerRadius" Value="7"/>
+</Style>
+<Style Selector="Border.readerControlGroup">
+  <Setter Property="CornerRadius" Value="10"/><Setter Property="Padding" Value="4"/>
+  <Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+  <Setter Property="Background" Value="{DynamicResource Surface}"/>
+</Style>
+<Style Selector="Button.typeSize">
+  <Setter Property="Height" Value="30"/><Setter Property="MinHeight" Value="30"/>
+  <Setter Property="MinWidth" Value="44"/><Setter Property="Padding" Value="6,0"/><Setter Property="FontSize" Value="16"/>
+</Style>
+<Style Selector="Button.settingsTab">
+  <Setter Property="Height" Value="42"/><Setter Property="HorizontalAlignment" Value="Stretch"/>
+  <Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="Padding" Value="14,6"/>
+</Style>
+<Style Selector="Border.accountLinks">
+  <Setter Property="CornerRadius" Value="10"/><Setter Property="BorderThickness" Value="1"/>
+  <Setter Property="BorderBrush" Value="{DynamicResource Line}"/><Setter Property="Background" Value="{DynamicResource Surface}"/>
+</Style>
 </Application.Styles></Application>

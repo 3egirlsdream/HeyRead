@@ -20,6 +20,21 @@ Structure and component alignment have been reviewed. Pixel-for-pixel identity h
 
 ## 0.3.1 · 2026-11-18
 
-At 1280×800 the default 16-point article text, 22-point line height and 10-point paragraph spacing bring the game card and quote into the first screen of the approved Sekiro example. Saved typography overrides are preserved. The workspace gallery at `outputs/a-refinement/index.html` pairs actual screenshots with A pages 02, 07, 11 and 16. The account capture shows the signed-out state. The narrow comment capture uses 900×640.
+At 1280×800 the default 16-point article text, 22-point line height and 10-point paragraph spacing bring the game card and quote into the first screen of the approved Sekiro example. Saved typography overrides are preserved. The workspace gallery at `outputs/a-refinement/index.html` pairs actual screenshots with A pages 02, 07, 11 and 16. The initial account capture showed the signed-out state. The narrow comment capture uses 900×640.
 
 Generated glyphs, icons, system chrome and the newer product branding still differ. Pages 17–24 have shared layout rules but no individual A rasters for pixel comparison.
+
+### A geometry pass
+
+Compare A pages 02, 07, 11 and 16 at 1280×800 logical points. The gallery includes both a scaled side-by-side view and a native logical-size switch. The refreshed account capture uses an isolated signed-in sample and the search capture has three local history entries.
+
+| Control | Logical size in the implementation |
+| --- | --- |
+| Search field, search scope buttons | up to 668×56, at least 77×36 |
+| Feed compact cover, wide related-game card | 310×160, 304 wide with a 110 minimum height |
+| Account avatar, list item content, logout button | 98×98, 56 high, at least 210×46 |
+| Wide reader like, favorite, original | minimum widths 118, 92, 116, all 36 high |
+| Reader mode switch | 26-high selected segment within a 36-high outlined group |
+| Settings navigation | 42 high in both selected and unselected states |
+
+The layout regression test measures actual Avalonia control bounds in wide and narrow windows. System window chrome, generated game art, glyph metrics and live metadata can differ across screenshots.

@@ -18,6 +18,7 @@ public sealed partial class MainWindow
     private bool _readerMounted;
     private double ReaderWidth => _narrow ? Math.Max(1, Bounds.Width - 210) : Math.Max(1, Bounds.Width - 211 - _vm.Prefs.ListWidth);
     private bool WideReader => ReaderWidth >= 700;
+    private bool WideReaderActions => WideReader && (_vm.Prefs.Language is not ("en" or "fr") || ReaderWidth >= 850);
     private bool HeyboxActions => _vm.Article?.Story.Source == Source.HEYBOX || _vm.VisualFixture;
     private void RenderReader()
     {
@@ -108,18 +109,18 @@ public sealed partial class MainWindow
     }
     private Control BuildReadingActions(Article article)
     {
-        var actions = new Grid { ColumnDefinitions = new("Auto,*,Auto"), ColumnSpacing = 10, Margin = new(20, 12, 18, 14) };
-        var left = Row(10);
+        var actions = new Grid { ColumnDefinitions = new("Auto,*,Auto"), ColumnSpacing = 10, Margin = new(17, 12, 17, 14) };
+        var left = Row(14);
         if (HeyboxActions)
         {
             var likes = article.LikeCount is { } count ? " " + count : "";
             left.Children.Add(ActionButton("heart", T(article.Liked == true ? "已喜欢" : "喜欢") + likes, () => Social("like")));
-            if (!WideReader) left.Children.Add(ActionButton("comment", T("评论") + Counter(article), () => { SwitchComments(true); return Task.CompletedTask; }));
+            if (!WideReaderActions) left.Children.Add(ActionButton("comment", T("评论") + Counter(article), () => { SwitchComments(true); return Task.CompletedTask; }));
             left.Children.Add(ActionButton("bookmark", T(article.Favorited == true ? "已收藏" : "收藏"), () => Social("favorite")));
         }
         var original = ActionButton("open", T("查看原文"), () => { OpenUrl(article.Story.Url); return Task.CompletedTask; });
         var menu = new ContextMenu(); var share = new MenuItem { Header = T("分享") }; share.Click += (_, _) => Native.Share(article.Story.Url ?? article.Story.Title); menu.Items.Add(share); original.ContextMenu = menu; left.Children.Add(original);
-        if (!WideReader && HeyboxActions)
+        if (!WideReaderActions && HeyboxActions)
         {
             var spread = new Grid { ColumnDefinitions = new("*,*,*,*"), ColumnSpacing = 16 };
             var buttons = left.Children.ToArray(); left.Children.Clear();
@@ -127,17 +128,27 @@ public sealed partial class MainWindow
             Grid.SetColumnSpan(spread, 3); actions.Children.Add(spread);
         }
         else actions.Children.Add(left);
-        if (WideReader)
+        if (WideReaderActions)
         {
-            var right = Row(10);
+            var right = Row(20);
             if (HeyboxActions)
             {
                 var text = Button(T("正文"), () => SwitchComments(false), !_vm.CommentsMode ? "primary" : "flat");
                 var comments = Button(T("评论") + Counter(article), () => SwitchComments(true), _vm.CommentsMode ? "primary" : "flat");
-                text.Height = comments.Height = 30;
-                right.Children.Add(Brush(new Border { Child = Row(3, text, comments), Padding = new(3), CornerRadius = new(9) }, Border.BackgroundProperty, "Subtle"));
+                text.Classes.Add("readerSegment");
+                comments.Classes.Add("readerSegment");
+                comments.MinWidth = 80;
+                var modes = new Border { Child = Row(3, text, comments), Height = 36 };
+                modes.Classes.Add("readerControlGroup");
+                right.Children.Add(modes);
             }
-            right.Children.Add(Row(1, Button("A−", () => ChangeBodySize(-1), "flat"), Button("A+", () => ChangeBodySize(1), "flat")));
+            var smaller = Button("A−", () => ChangeBodySize(-1), "flat");
+            var larger = Button("A+", () => ChangeBodySize(1), "flat");
+            smaller.Classes.Add("typeSize");
+            larger.Classes.Add("typeSize");
+            var sizes = new Border { Child = Row(0, smaller, larger), Height = 36, Padding = new(2) };
+            sizes.Classes.Add("readerControlGroup");
+            right.Children.Add(sizes);
             Grid.SetColumn(right, 2); actions.Children.Add(right);
         }
         else if (!HeyboxActions) { var shareButton = ActionButton("share", T("分享"), () => { Native.Share(article.Story.Url ?? article.Story.Title); return Task.CompletedTask; }); Grid.SetColumn(shareButton, 2); actions.Children.Add(shareButton); }
@@ -146,7 +157,12 @@ public sealed partial class MainWindow
     private string Counter(Article article) => (article.CommentCount ?? article.Story.CommentCount) is { } count ? " " + count : _vm.Comments.Count > 0 ? " " + _vm.Comments.Count : "";
     private Button ActionButton(string icon, string label, Func<Task> action)
     {
-        var button = AsyncButton("", action); button.Content = Row(8, Icons.Get(icon, 20), Text(label, WideReader ? 14 : _vm.Prefs.Language is "en" or "fr" ? 13 : 16)); button.Height = 36; button.Padding = new(13, 5); return button;
+        var button = AsyncButton("", action);
+        button.Content = Row(9, Icons.Get(icon, 19), Text(label, WideReaderActions ? 15 : _vm.Prefs.Language is "en" or "fr" ? 13 : 16));
+        button.Height = 36;
+        button.Padding = new(12, 3);
+        if (WideReaderActions) button.MinWidth = icon switch { "heart" => 118, "bookmark" => 92, "open" => 116, _ => 36 };
+        return button;
     }
     private void ChangeBodySize(int delta)
     {

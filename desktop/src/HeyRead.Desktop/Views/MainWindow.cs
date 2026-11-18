@@ -76,7 +76,13 @@ public sealed partial class MainWindow : Window
         vm.ContentChanged += Render;
         vm.SettingsChanged += OnSettingsChanged;
         vm.PropertyChanged += OnViewModelChanged;
-        SizeChanged += (_, _) => { UpdateResponsive(); if (!_rendering && _vm.Page is not ("settings" or "account" or "games")) RenderReader(); }; KeyDown += OnKeys;
+        SizeChanged += (_, e) =>
+        {
+            UpdateResponsive();
+            if (DirectoryOverview && (e.PreviousSize.Width >= 1180) != (e.NewSize.Width >= 1180))
+                _list.ItemTemplate = new FuncDataTemplate<Story>((story, _) => StoryRow(story));
+            if (!_rendering && _vm.Page is not ("settings" or "account" or "games")) RenderReader();
+        }; KeyDown += OnKeys;
         if (Application.Current?.PlatformSettings is { } settings) settings.ColorValuesChanged += OnSystemColorsChanged;
         Opened += async (_, _) => { _notifications = new WindowNotificationManager(this) { MaxItems = 3, Position = NotificationPosition.BottomRight }; ApplyTheme(); _ = CheckAfterStartup(); await vm.InitializeAsync(); };
         Closing += (_, _) => { SaveOffsets(); vm.Store.SavePreferences(); };
@@ -136,7 +142,21 @@ public sealed partial class MainWindow : Window
             foreach (var (value, name) in new[] { ("all", "推荐"), ("news", "资讯") }) { var b = AsyncButton(T(name), async () => { _vm.Channel = value; await _vm.LoadAsync(); }, value == _vm.Channel ? "primary" : null); b.Height = 35; b.MinWidth = 70; b.FontSize = 16; tabs.Children.Add(b); }
             children.Children.Add(tabs); var line = Line(); line.Margin = new(0, 6, 0, 0); children.Children.Add(line);
         }
-        if (_vm.Page is "dynamic" or "following") children.Children.Add(Row(6, AsyncButton(T("推荐动态"), () => Navigate("dynamic"), _vm.Page == "dynamic" ? "primary" : null), AsyncButton(T("关注动态"), () => Navigate("following"), _vm.Page == "following" ? "primary" : null)));
+        if (_vm.Page is "dynamic" or "following")
+        {
+            var tabs = Row(6);
+            foreach (var (page, label, description) in new[] { ("dynamic", "推荐", "推荐动态"), ("following", "关注", "关注动态") })
+            {
+                var tab = AsyncButton(T(label), () => Navigate(page), page == _vm.Page ? "primary" : null);
+                tab.Classes.Add("sectionTab");
+                ToolTip.SetTip(tab, T(description));
+                tabs.Children.Add(tab);
+            }
+            children.Margin = new(18, 9, 18, 0);
+            children.Spacing = 14;
+            children.Children.Add(tabs);
+            children.Children.Add(Line());
+        }
         if (_vm.Page is "history" or "cloudhistory") children.Children.Add(Row(6, AsyncButton(T("本机历史"), () => Navigate("history"), _vm.Page == "history" ? "primary" : null), AsyncButton(T("账号历史"), () => Navigate("cloudhistory"), _vm.Page == "cloudhistory" ? "primary" : null)));
         if (_vm.Page == "following")
         {

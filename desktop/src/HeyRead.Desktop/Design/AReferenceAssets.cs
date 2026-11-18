@@ -23,12 +23,19 @@ public sealed class AReferenceAssets : IDisposable
     {
         if (_root == null) return null;
         var file = key == "game" || key == "hero" && _reader ? "11-article.png" : "01-discover.png";
+        if (key.EndsWith("-feed", StringComparison.Ordinal) || key == "feed-game") file = "02-recommended.png";
+        if (key == "account-large") file = "16-account.png";
         var rect = key switch
         {
             "hero" => _reader ? new PixelRect(705, 219, 853, 264) : new PixelRect(824, 238, 739, 317),
             "avatar" => new PixelRect(834, 173, 41, 38),
+            "account-large" => new PixelRect(291, 369, 117, 117),
             "account" => new PixelRect(36, 861, 37, 35),
             "game" => new PixelRect(712, 765, 170, 72),
+            "1-feed" => new PixelRect(294, 228, 378, 191),
+            "2-feed" => new PixelRect(294, 518, 378, 172),
+            "5-feed" => new PixelRect(294, 785, 378, 170),
+            "feed-game" => new PixelRect(1207, 251, 106, 105),
             "1" => new PixelRect(284, 208, 117, 78),
             "2" => new PixelRect(284, 332, 119, 82),
             "3" => new PixelRect(284, 457, 119, 82),

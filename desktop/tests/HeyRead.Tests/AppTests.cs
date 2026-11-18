@@ -21,6 +21,49 @@ public static class TestAppBuilder { public static AppBuilder BuildAvaloniaApp()
 public sealed class AppTests
 {
     [AvaloniaFact]
+    public async Task SearchControlsAndAccountRowsKeepTheirMeasuredSizesOnBothViewports()
+    {
+        var root = Directory.CreateTempSubdirectory("heyread-geometry-");
+        var store = new LibraryStore(root.FullName);
+        using var api = new HeyReadApi(new FakeHandler("""{"status":"ok","result":{"links":[]}}"""));
+        using var vm = new MainViewModel(api, new(api), store, new MemorySessionStore(), new NoTranslation());
+        var window = new MainWindow(vm);
+        try
+        {
+            window.Show();
+            foreach (var size in new[] { new Size(1280, 800), new Size(900, 640) })
+            {
+                window.Width = size.Width;
+                window.Height = size.Height;
+                await vm.NavigateAsync("search");
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                window.Measure(size);
+                window.Arrange(new Rect(size));
+                window.UpdateLayout();
+                Assert.Equal(size, window.Bounds.Size);
+                var field = window.GetVisualDescendants().OfType<TextBox>().Single(control => control.MaxWidth == 668);
+                Assert.Equal(56, field.Bounds.Height);
+                Assert.Equal(Math.Min(668, size.Width - 210 - 62), field.Bounds.Width);
+                var tabs = window.GetVisualDescendants().OfType<Button>().Where(button => button.Classes.Contains("sectionTab")).ToList();
+                Assert.Equal(3, tabs.Count);
+                Assert.All(tabs, tab => Assert.Equal(new Size(77, 36), tab.Bounds.Size));
+
+                await vm.NavigateAsync("account");
+                window.UpdateLayout();
+                var group = window.GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains("accountLinks"));
+                Assert.Equal(58, group.Bounds.Height);
+                Assert.Equal(56, Assert.Single(group.GetVisualDescendants().OfType<Button>()).Bounds.Height);
+            }
+        }
+        finally
+        {
+            window.Close();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            root.Delete(true);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task CommentComposerRestoresDraftAfterSwitchingToArticleAndPostsToTheSelectedStory()
     {
         var root = Directory.CreateTempSubdirectory("heyread-composer-");

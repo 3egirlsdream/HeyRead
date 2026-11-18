@@ -14,7 +14,12 @@ public sealed partial class MainWindow
     private Control BuildSettings()
     {
         var nav = Stack(6); nav.Margin = new(20, 24);
-        foreach (var (id, text) in new[] { ("appearance", "外观"), ("reading", "阅读排版与字体"), ("data", "数据来源与缓存"), ("blocking", "内容屏蔽"), ("about", "关于及第三方说明") }) nav.Children.Add(Button(T(text), () => { _settingsTab = id; Render(); }, id == _settingsTab ? "primary" : "nav"));
+        foreach (var (id, text) in new[] { ("appearance", "外观"), ("reading", "阅读排版与字体"), ("data", "数据来源与缓存"), ("blocking", "内容屏蔽"), ("about", "关于及第三方说明") })
+        {
+            var tab = Button(T(text), () => { _settingsTab = id; Render(); }, id == _settingsTab ? "primary" : "flat");
+            tab.Classes.Add("settingsTab");
+            nav.Children.Add(tab);
+        }
         var content = Stack(24); content.Margin = new(28); content.MaxWidth = 700; content.HorizontalAlignment = HorizontalAlignment.Stretch;
         var p = _vm.Prefs;
         switch (_settingsTab)

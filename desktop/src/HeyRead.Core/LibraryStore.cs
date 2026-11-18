@@ -41,6 +41,7 @@ public sealed class LibraryStore
     {
         Root = Path.GetFullPath(root); Directory.CreateDirectory(Root); Directory.CreateDirectory(Path.Combine(Root, "cache")); Directory.CreateDirectory(Path.Combine(Root, "fonts"));
         Preferences = Read<Preferences>("preferences.json") ?? new(); History = Read<List<HistoryEntry>>("history.json") ?? []; Searches = Read<List<SearchEntry>>("searches.json") ?? []; Drafts = Read<Dictionary<string, string>>("drafts.json") ?? [];
+        Searches.RemoveAll(entry => string.IsNullOrWhiteSpace(entry?.Query));
         if (Preferences.VisualRevision < 2)
         {
             if (Preferences.ListWidth == 370) Preferences.ListWidth = 432;

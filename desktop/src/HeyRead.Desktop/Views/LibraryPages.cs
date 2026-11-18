@@ -29,7 +29,7 @@ public sealed partial class MainWindow
     private Control BuildAccount()
     {
         var account = _vm.Api.Session;
-        var panel = Stack(20);
+        var panel = Stack(26);
         panel.Margin = new(24, 20, 24, 30);
         if (!_vm.Prefs.NoImages) panel.Children.Add(Cover(182));
         var identity = Stack(4, Text(account == null ? T("账号概览") : _vm.AccountName, 25, true));
@@ -44,15 +44,22 @@ public sealed partial class MainWindow
             identity.Children.Add(Text(T("已登录小黑盒"), 14, muted: true));
         }
         else identity.Children.Add(AsyncButton(T("登录小黑盒"), LoginDialog, "primary"));
-        panel.Children.Add(Row(20, Avatar(_vm.Prefs.NoImages ? null : account?.Avatar, 88), identity));
+        var profile = Row(18, Avatar(_vm.Prefs.NoImages ? null : account?.Avatar, 98), identity);
+        if (account == null) panel.Children.Add(profile);
+        else
+        {
+            var following = AsyncButton(T("关注动态"), () => Navigate("following"), "flat");
+            panel.Children.Add(Columns("*,Auto", profile, following));
+        }
 
         var links = Stack(0);
         void Link(string icon, string label, Func<Task> open)
         {
             var b = AsyncButton("", open, "flat");
             b.Height = 56;
+            b.Padding = new(24, 0, 16, 0);
             b.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-            b.Content = Columns("48,*,20", Icons.Get(icon, 22), Text(T(label), 17, true), Icons.Get("chevron_right", 16, "Muted"));
+            b.Content = Columns("52,*,20", Icons.Get(icon, 22), Text(T(label), 17, true), Icons.Get("chevron_right", 16, "Muted"));
             links.Children.Add(b);
         }
         if (account != null)
@@ -65,21 +72,22 @@ public sealed partial class MainWindow
             links.Children.Add(Line());
         }
         Link("book_open", "本机历史", () => Navigate("history"));
-        if (account != null)
-        {
-            links.Children.Add(Line());
-            Link("chat", "关注动态", () => Navigate("following"));
-        }
-        panel.Children.Add(Group(links));
+        var linkGroup = new Border { Child = links };
+        linkGroup.Classes.Add("accountLinks");
+        panel.Children.Add(linkGroup);
         if (account != null)
         {
             var logout = AsyncButton(T("退出登录"), async () =>
             {
                 if (await Confirm(T("退出登录"), "退出当前账号？本机历史与阅读偏好会保留。")) _vm.Logout();
             });
-            logout.Width = 210;
+            logout.MinWidth = 210;
+            logout.Height = 46;
+            logout.FontSize = 18;
             logout.HorizontalAlignment = HorizontalAlignment.Center;
-            panel.Children.Add(logout);
+            var actions = Stack(22, Line(), logout);
+            actions.Margin = new(0, 22, 0, 0);
+            panel.Children.Add(actions);
         }
         return new ScrollViewer { Content = panel };
     }
@@ -87,15 +95,26 @@ public sealed partial class MainWindow
     private Control SearchHistory()
     {
         var entries = _vm.Store.Searches.ToArray();
-        var rows = Stack(2);
-        rows.Children.Add(Columns("*,Auto", Text(T("搜索记录"), 18, true),
-            Button(T("清除记录"), () => { _vm.Store.ClearSearches(); Render(); }, "flat")));
+        var rows = Stack(0);
+        var clear = Button("", () => { _vm.Store.ClearSearches(); Render(); }, "flat");
+        clear.Content = Row(7, Icons.Get("delete", 18, "Muted"), Text(T("清除记录"), 15, muted: true));
+        clear.Padding = new(6, 3);
+        var heading = Text(T("搜索记录"), 21, true);
+        heading.VerticalAlignment = VerticalAlignment.Center;
+        var headingRow = Columns("*,Auto", heading, clear);
+        headingRow.Margin = new(0, 0, 0, 10);
+        rows.Children.Add(headingRow);
         if (entries.Length == 0) rows.Children.Add(Text(T("暂无搜索记录"), 14, muted: true));
         foreach (var entry in entries)
         {
             var replay = AsyncButton("", () => _vm.ReplaySearchAsync(entry), "flat");
             replay.HorizontalContentAlignment = HorizontalAlignment.Left;
-            replay.Content = Row(12, Icons.Get("search", 18), Text(entry.Query, 16), Text(entry.Steam ? "Steam" : entry.Scope?.Name ?? T("全站"), 13, muted: true));
+            replay.Height = 51;
+            replay.Padding = new(8, 0);
+            var scope = entry.Steam ? "Steam" : entry.Scope?.Name ?? T("全站");
+            var badge = Brush(new Border { Child = Text(scope, 14, muted: true), Padding = new(9, 2), CornerRadius = new(13) },
+                Border.BackgroundProperty, entry.Scope == null && !entry.Steam ? "Selection" : "Subtle");
+            replay.Content = Row(16, Icons.Get("search", 18, "Muted"), Text(entry.Query, 17, true), badge);
             var remove = Button("×", () => { _vm.Store.RemoveSearch(entry); Render(); }, "flat");
             Avalonia.Automation.AutomationProperties.SetName(remove, T("删除记录") + " " + entry.Query);
             rows.Children.Add(Columns("*,40", replay, remove));
@@ -106,7 +125,7 @@ public sealed partial class MainWindow
 
     private Control BuildSearchLanding()
     {
-        var field = new TextBox { PlaceholderText = T("搜索文章、作者或游戏"), MaxLength = 120, MaxWidth = 670, Height = 45 };
+        var field = new TextBox { PlaceholderText = T("搜索文章、作者或游戏"), MaxLength = 120, MaxWidth = 668, Height = 56, FontSize = 19, VerticalContentAlignment = VerticalAlignment.Center };
         field.KeyDown += async (_, e) =>
         {
             if (e.Key != Key.Enter) return;
@@ -116,26 +135,43 @@ public sealed partial class MainWindow
             await _vm.SearchAsync();
         };
         var hero = new Grid();
-        if (!_vm.Prefs.NoImages) hero.Children.Add(Cover(234));
+        if (!_vm.Prefs.NoImages)
+        {
+            var backdrop = Cover(260);
+            backdrop.CornerRadius = default;
+            backdrop.OpacityMask = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                GradientStops = [new GradientStop(Colors.Black, 0.58), new GradientStop(Colors.Transparent, 1)]
+            };
+            hero.Children.Add(backdrop);
+        }
         Brush(field, TextBox.BackgroundProperty, "Surface");
-        field.InnerLeftContent = new Border { Child = Icons.Get("search", 20, "Muted"), Margin = new(10, 0, 8, 0) };
+        field.InnerLeftContent = new Border { Child = Icons.Get("search", 24), Margin = new(12, 0, 10, 0) };
         field.VerticalAlignment = VerticalAlignment.Bottom;
-        field.Margin = new(24, 16);
+        field.Margin = new(16, 14, 46, 12);
         hero.Children.Add(field);
-        var scopes = Row(10);
+        var scopes = Row(14);
         scopes.HorizontalAlignment = HorizontalAlignment.Center;
-        scopes.Margin = new(8, 12);
+        scopes.Margin = new(12, 10, 40, 0);
         var candidates = _vm.Store.History.SelectMany(item =>
             (item.Story.Sections ?? []).Select(section => new Destination("section", section.Id, section.Name))
             .Concat((item.Story.Topics ?? []).Select(topic => new Destination("topic", topic.Id, topic.Name))))
             .Concat(_vm.Store.Searches.Select(entry => entry.Scope).OfType<Destination>()).ToArray();
         var scopeButtons = new Dictionary<string, Button>();
         var target = new ComboBox { MinWidth = 120, MaxWidth = 260 };
+        var returnKey = Brush(new Border { Width = 36, Height = 28, CornerRadius = new(7), BorderThickness = new(1),
+            Child = new TextBlock { Text = "↵", FontSize = 18, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } },
+            Border.BorderBrushProperty, "Line");
+        var hint = Row(10, returnKey, Text(T("回车搜索"), 16, muted: true));
+        hint.Margin = new(22, 0, 0, 0);
         void ShowTargets(string kind)
         {
             foreach (var (key, button) in scopeButtons)
                 button.Classes.Set("primary", key == kind);
             target.IsVisible = kind.Length > 0;
+            hint.IsVisible = !target.IsVisible;
             var items = candidates.Prepend(_vm.SearchScope).OfType<Destination>()
                 .Where(item => item.Kind == kind && item.Id.Length > 0).DistinctBy(item => item.Id).ToArray();
             var preferred = _vm.SearchScope;
@@ -151,14 +187,16 @@ public sealed partial class MainWindow
         foreach (var (kind, label) in new[] { ("", "全站"), ("section", "分区"), ("topic", "话题") })
         {
             var button = Button(T(label), () => ShowTargets(kind));
-            button.MinWidth = 70;
+            button.Classes.Add("sectionTab");
+            button.MinWidth = 77;
             scopes.Children.Add(button);
             scopeButtons.Add(kind, button);
         }
         scopes.Children.Add(target);
+        scopes.Children.Add(hint);
         ShowTargets(_vm.SearchScope?.Kind ?? "");
-        var history = SearchHistory();
-        history.Margin = new(64, 26);
+        var history = Stack(30, Line(), SearchHistory());
+        history.Margin = new(86, 30, 86, 24);
         return new ScrollViewer { Content = Stack(0, hero, scopes, history) };
     }
 
