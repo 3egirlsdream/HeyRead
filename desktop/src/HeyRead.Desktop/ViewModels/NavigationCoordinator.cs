@@ -8,12 +8,11 @@ public sealed partial class MainViewModel
     private readonly HashSet<string> _socialOperations = [];
     private string? _restoreFollowingId;
     public NavigationState CurrentViewport { get; private set; } = new();
-    public int CommentsRevision { get; private set; }
-    public NavigationState CaptureNavigation() => new(Page, Target, Game, Query, SearchScope, Channel, AuthorMoments, Folder, FollowingFilter?.Id, Article?.Story is { } story ? LibraryStore.Summary(story) : null, CurrentViewport.ListOffset, CurrentViewport.ArticleOffset, CurrentViewport.CommentOffset, CommentsMode, CurrentViewport.ShowDetail);
+    public NavigationState CaptureNavigation() => new(Page, Target, Game, Query, SearchScope, Channel, AuthorMoments, Folder, FollowingFilter?.Id, Article?.Story is { } story ? LibraryStore.Summary(story) : null, CurrentViewport.ListOffset, CurrentViewport.ArticleOffset, CurrentViewport.CommentOffset, CurrentViewport.CommentsMode, CurrentViewport.ShowDetail);
     private NavigationState CommittedNavigation() => CaptureNavigation() with { Query = CurrentViewport.Query, SearchScope = CurrentViewport.SearchScope };
     public void SaveViewport(double list, double article, double comments, bool detail)
     {
-        CurrentViewport = CommittedNavigation() with { ListOffset = list, ArticleOffset = article, CommentOffset = comments, ShowDetail = detail };
+        CurrentViewport = CommittedNavigation() with { ListOffset = list, ArticleOffset = article, CommentOffset = comments, CommentsMode = false, ShowDetail = detail };
         if (Article is { } current) Store.Visit(current.Story, article, comments);
         SaveNavigation();
     }

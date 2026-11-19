@@ -53,6 +53,18 @@ public sealed class RefinementTests
         Assert.DoesNotContain(blocks, b => b.Kind == BlockKind.Image);
     }
     [Fact]
+    public void ReaderParagraphsPreserveStylesImagesAndSingleLineBreaks()
+    {
+        var blocks = ContentParser.Html("""
+            <p>第一段<em>结尾<br><br>第二段</em><br>同段换行<br>　第三段<img class="emoji" src="https://cdn.example/emoji.png" alt="[图]"><br>       第四段</p>
+            """);
+        Assert.Equal(new[] { "第一段结尾", "第二段\n同段换行", "第三段[图]", "第四段" }, blocks.Select(block => block.Text));
+        Assert.All(blocks, block => Assert.Equal(BlockKind.Paragraph, block.Kind));
+        Assert.Contains(blocks[0].Runs!, run => run.Text == "结尾" && run.Italic);
+        Assert.Contains(blocks[1].Runs!, run => run.Text == "第二段" && run.Italic);
+        Assert.Contains(blocks[2].Runs!, run => run.ImageUrl == "https://cdn.example/emoji.png");
+    }
+    [Fact]
     public void FontImportDoesNotOverwriteExistingFileAndCacheClearIncludesShares()
     {
         var root = TemporaryRoot(); var source = TemporaryRoot(); Directory.CreateDirectory(source);

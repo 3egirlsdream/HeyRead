@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/HeyRead.Core/HeyRead.Core.csproj" />
     <Project Path="src/HeyRead.Desktop/HeyRead.Desktop.csproj" />
+    <Project Path="src/LiquidGlassAvaloniaUI/LiquidGlassAvaloniaUI.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/HeyRead.Tests/HeyRead.Tests.csproj" />

@@ -1,10 +1,15 @@
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 namespace HeyRead.Core;
 
 public static class ContentParser
 {
+    private static readonly Regex ParagraphBreak = new(
+        @"\n(?:(?:[ \t\u00A0\u3000]*\n)+[ \t\u00A0\u3000]*|[ \u00A0]*[\t\u3000][ \t\u00A0\u3000]*|[ \u00A0]{4,})",
+        RegexOptions.Compiled);
+
     public static string Text(string html) => new HtmlParser().ParseDocument(html).Body?.TextContent.Trim() ?? "";
     public static Story? Story(JsonNode? row, int depth = 0)
     {
@@ -72,7 +77,7 @@ public static class ContentParser
     private static void Walk(INode node, List<ArticleBlock> result, int depth)
     {
         if (depth > 16 || result.Count >= 512) return;
-        if (node is IText t) { if (!string.IsNullOrWhiteSpace(t.Data)) result.Add(new(BlockKind.Paragraph, t.Data.Trim())); return; }
+        if (node is IText t) { if (!string.IsNullOrWhiteSpace(t.Data)) AddParagraphs(result, [new(t.Data.Trim())]); return; }
         if (node is not IElement el) return;
         var tag = el.TagName.ToLowerInvariant();
         if (tag is "script" or "style" or "noscript") return;
@@ -90,9 +95,53 @@ public static class ContentParser
             result.Add(new(BlockKind.ListItem, string.Concat(runs.Select(r => r.Text)).Trim(), Level: el.Ancestors().OfType<IElement>().Count(a => a.TagName is "UL" or "OL"), Runs: runs, ListMarker: ordered ? (start + index) + "." : "•"));
             foreach (var child in el.Children.Where(c => c.TagName is "UL" or "OL")) Walk(child, result, depth + 1); return;
         }
-        if (tag is "p" or "div" && el.QuerySelector("video,iframe,p,div,blockquote,ul,ol,h1,h2,h3,h4") == null && el.QuerySelectorAll("img").All(IsEmoji)) { if (!string.IsNullOrWhiteSpace(el.TextContent) || el.QuerySelectorAll("img").Any(IsEmoji)) result.Add(new(BlockKind.Paragraph, el.TextContent.Trim(), Runs: Inline(el))); return; }
+        if (tag is "p" or "div" && el.QuerySelector("video,iframe,p,div,blockquote,ul,ol,h1,h2,h3,h4") == null && el.QuerySelectorAll("img").All(IsEmoji))
+        {
+            AddParagraphs(result, Inline(el));
+            return;
+        }
         foreach (var child in el.ChildNodes) Walk(child, result, depth + 1);
     }
+
+    private static void AddParagraphs(List<ArticleBlock> result, IReadOnlyList<RichRun> runs)
+    {
+        // Treat inline images as single characters so the ranges can cross formatting runs and consecutive <br> tags.
+        var source = string.Concat(runs.Select(run => run.ImageUrl == null ? run.Text : "\uFFFC"));
+        var runIndex = 0;
+        var runStart = 0;
+        var start = 0;
+        foreach (Match separator in ParagraphBreak.Matches(source))
+        {
+            AddSegment(start, separator.Index);
+            start = separator.Index + separator.Length;
+            if (result.Count >= 512) return;
+        }
+        AddSegment(start, source.Length);
+
+        void AddSegment(int from, int to)
+        {
+            if (from >= to || result.Count >= 512) return;
+            List<RichRun> segment = [];
+            while (runIndex < runs.Count && runStart < to)
+            {
+                var run = runs[runIndex];
+                var runEnd = runStart + (run.ImageUrl == null ? run.Text.Length : 1);
+                var left = Math.Max(from, runStart);
+                var right = Math.Min(to, runEnd);
+                if (left < right)
+                    segment.Add(run.ImageUrl != null || (left == runStart && right == runEnd)
+                        ? run
+                        : run with { Text = run.Text[(left - runStart)..(right - runStart)] });
+                if (runEnd > to) break;
+                runStart = runEnd;
+                runIndex++;
+            }
+            var text = string.Concat(segment.Select(run => run.Text)).Trim();
+            if (text.Length > 0 || segment.Any(run => run.ImageUrl != null))
+                result.Add(new(BlockKind.Paragraph, text, Runs: segment));
+        }
+    }
+
     public static IReadOnlyList<RichRun> Inline(INode node, bool bold = false, bool italic = false, string? url = null, bool code = false, int depth = 0)
     {
         if (depth > 16) return [];
@@ -134,7 +183,12 @@ public static class ContentParser
             var text = Text(c.S("text", "content", "comment"));
             var replies = Comments(row.Array("sub_comments", "subcomments", "replies", "child_comments"), root ?? id);
             var images = c.Array("imgs", "images")?.Select(x => x is JsonValue ? J.Https(x.ToString()) : x.FirstHttps("url", "src")).OfType<string>().ToArray() ?? [];
-            result.Add(new(id, root ?? (c.S("root_id", "root_comment_id") is { Length: > 0 } r ? r : id), text, Profile(c["user"] ?? c["user_info"]) ?? new(), c.S("create_str", "date") is { Length: > 0 } displayDate ? displayDate : FormatTime(c.L("create_at")), c.I("comment_award_num", c.I("award_num", c.I("up", c.I("support_num")))), c.S("is_support") is "1" or "true", replies, images));
+            var replyTo = Profile(c["replyuser"])?.Name;
+            result.Add(new(id, root ?? (c.S("root_id", "root_comment_id") is { Length: > 0 } r ? r : id), text,
+                Profile(c["user"] ?? c["user_info"], c.S("ip_location")) ?? new(),
+                c.S("create_str", "date") is { Length: > 0 } displayDate ? displayDate : FormatTime(c.L("create_at")),
+                c.I("comment_award_num", c.I("award_num", c.I("up", c.I("support_num")))), c.S("is_support") is "1" or "true",
+                replies, images, c.OptionalInt("child_num"), replyTo));
         }
         return result;
     }

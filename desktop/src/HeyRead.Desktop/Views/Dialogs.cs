@@ -15,7 +15,16 @@ namespace HeyRead.Desktop.Views;
 
 public sealed partial class MainWindow
 {
-    private Window Dialog(string title, double width, double height) => new() { Title = T(title), Width = width, Height = height, MinWidth = Math.Min(340, width), MinHeight = Math.Min(220, height), WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Background, FontFamily = FontFamily };
+    private Window Dialog(string title, double width, double height)
+    {
+        var window = new Window
+        {
+            Title = T(title), Width = width, Height = height, MinWidth = Math.Min(340, width), MinHeight = Math.Min(220, height),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, FontFamily = FontFamily
+        };
+        ApplyRendering(window);
+        return Brush(window, BackgroundProperty, "Surface");
+    }
     private async Task ShowDialogContent(string title, Control content, double width = 480, double height = 360)
     {
         var window = Dialog(title, width, height); var close = Button(T("关闭"), window.Close); var layout = new Grid { RowDefinitions = new("*,Auto"), Margin = new(24) }; layout.Children.Add(new ScrollViewer { Content = content }); Grid.SetRow(close, 1); close.HorizontalAlignment = HorizontalAlignment.Right; close.Margin = new(0, 16, 0, 0); layout.Children.Add(close); window.Content = layout; await window.ShowDialog(this);
@@ -63,8 +72,10 @@ public sealed partial class MainWindow
     }
     private async Task CommentDialog(Comment? reply)
     {
+        if (_vm.VisualFixture) return;
+        var storyKey = _vm.Article?.Story.Key;
         if (_vm.Api.Session == null) { await LoginDialog(); if (_vm.Api.Session == null) return; }
-        var snapshot = _vm.Article; if (snapshot == null) return;
+        var snapshot = _vm.Article; if (snapshot == null || snapshot.Story.Key != storyKey) return;
         var expectedAccount = _vm.Api.Session?.UserId;
         var key = expectedAccount + ":" + snapshot.Story.Key + ":" + (reply?.Id ?? "root");
         var window = Dialog(reply == null ? T("写评论") : T("回复") + " " + reply.Author.Name, 540, 340);
@@ -73,7 +84,9 @@ public sealed partial class MainWindow
         var send = AsyncButton(T("发送"), async () =>
         {
             var draft = editor.Text ?? ""; _vm.Store.SetDraft(key, draft);
+            if (string.IsNullOrWhiteSpace(draft)) { editor.Focus(); return; }
             if (_vm.Api.Session?.UserId != expectedAccount) { error.Text = T("账号已变化，请重新打开评论编辑器"); return; }
+            if (_vm.Article?.Story.Key != storyKey) return;
             try { await _vm.Api.SocialAsync(snapshot.Story, "comment", true, draft, snapshot.AuthCode, reply); _vm.Store.SetDraft(key, ""); editor.Text = ""; window.Close(); _vm.Toast = "发送成功"; if (_vm.Article?.Story.Key == snapshot.Story.Key) await _vm.RetryDetailAsync(); }
             catch (Exception e) { error.Text = T("发送失败，草稿已保留：") + T(e.Message); }
         }, "primary");
@@ -150,20 +163,6 @@ public sealed partial class MainWindow
         scroll.PointerWheelChanged += (_, e) => { if (bitmap == null || !e.KeyModifiers.HasFlag(KeyModifiers.Meta)) return; ZoomBy(e.Delta.Y > 0 ? 1.2 : 1 / 1.2); e.Handled = true; };
         window.KeyDown += async (_, e) => { if (e.Key == Key.Escape) window.Close(); if (e.Key is Key.Left or Key.Right) { index = (index + (e.Key == Key.Right ? 1 : urls.Length - 1)) % urls.Length; await Load(); } };
         window.Opened += async (_, _) => await Load(); window.Closed += (_, _) => { lifetime.Cancel(); load?.Cancel(); host.Content = null; bitmap?.Dispose(); }; await window.ShowDialog(this); load?.Dispose();
-    }
-    private async Task RepliesDialog(Comment root)
-    {
-        var window = Dialog("楼中楼", 580, 560); var thread = new List<Comment> { root };
-        var list = Stack(16, CommentView(root, thread, true)); string? cursor = null; var seen = new HashSet<string> { root.Id };
-        var more = new Button { Content = T("加载更多") }; var status = Text("", 12, muted: true);
-        async Task Load()
-        {
-            more.IsEnabled = false;
-            try { var page = await _vm.RepliesAsync(root, cursor); foreach (var c in page.Items) if (seen.Add(c.Id)) { thread.Add(c); list.Children.Add(CommentView(c, thread, true)); } more.IsVisible = page.HasMore && page.Cursor != cursor; cursor = page.Cursor; status.Text = ""; }
-            catch (Exception e) { status.Text = e.Message; }
-            finally { more.IsEnabled = true; }
-        }
-        more.Click += async (_, _) => await Load(); var layout = new Grid { RowDefinitions = new("*,Auto"), Margin = new(24) }; layout.Children.Add(new ScrollViewer { Content = list }); var footer = Stack(8, status, more); Grid.SetRow(footer, 1); layout.Children.Add(footer); window.Content = layout; window.Opened += async (_, _) => await Load(); await window.ShowDialog(this);
     }
     private async Task RuleDialog(BlockRule? existing = null)
     {

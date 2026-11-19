@@ -10,6 +10,8 @@ CommunityToolkit.Mvvm https://github.com/CommunityToolkit/dotnet
 AngleSharp https://github.com/AngleSharp/AngleSharp
 QRCoder https://github.com/codebude/QRCoder
 Fluent System Icons https://github.com/microsoft/fluentui-system-icons
+LiquidGlassAvaloniaUI https://github.com/KaranocaVe/LiquidGlassAvaloniaUI
+Copyright (c) 2025 KaranocaVe. Vendored at cde864d6efebc5b32484eb055900308ef4f65754.
 Fluent icon geometries in Resources/icons.json are from Microsoft Fluent System Icons.
 
 MIT License

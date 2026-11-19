@@ -142,8 +142,11 @@ public sealed class HeyReadApi : IDisposable
     public async Task<Page<Comment>> CommentsAsync(Story story, int page, string? rootId = null, string? cursor = null, CancellationToken ct = default)
     {
         var p = rootId == null ? TreeParameters(story, page) : new Dictionary<string, string> { ["root_comment_id"] = rootId, ["hide_cy"] = "0" }; if (cursor != null) p["lastval"] = cursor;
-        var json = await RequestAsync(rootId == null ? "/bbs/app/link/tree/v2" : "/bbs/app/comment/sub/comments", p, true, ct: ct);
+        var account = Session != null;
+        var path = rootId != null ? "/bbs/app/comment/sub/comments" : account ? "/bbs/app/link/tree/v2" : "/bbs/app/link/tree";
+        var json = await RequestAsync(path, p, account, ct: ct);
         var result = rootId == null ? json["result"]?["comment"] : json["result"]; var rows = result.Array("comments", "comment", "list", "replies", "items");
+        if (rows == null) throw new ApiException("评论暂不可用，请重试");
         return new(ContentParser.Comments(rows, rootId), result?["comment_config"].B("has_more_floors") ?? result.B("has_more") ?? rows?.Count >= 20, page + 1, result.S("lastval"));
     }
     public async Task<QrChallenge> QrAsync(CancellationToken ct)

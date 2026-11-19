@@ -22,6 +22,8 @@ public sealed class AReferenceAssets : IDisposable
     public IImage? Image(string key)
     {
         if (_root == null) return null;
+        if (Path.GetExtension(_root).Equals(".png", StringComparison.OrdinalIgnoreCase))
+            return CompactArtwork(key, _root);
         var file = key == "game" || key == "hero" && _reader ? "11-article.png" : "01-discover.png";
         if (key.EndsWith("-feed", StringComparison.Ordinal) || key == "feed-game") file = "02-recommended.png";
         if (key == "account-large") file = "16-account.png";
@@ -50,6 +52,30 @@ public sealed class AReferenceAssets : IDisposable
             source = new Bitmap(path); _sources[file] = source;
         }
         return new CroppedBitmap { Source = source, SourceRect = rect };
+    }
+    private IImage? CompactArtwork(string key, string path)
+    {
+        var region = key switch
+        {
+            "hero" => new PixelRect(450, 237, 404, 221),
+            "avatar" => new PixelRect(451, 173, 37, 37),
+            "comment-1" => new PixelRect(1325, 323, 36, 36),
+            "reply-1" => new PixelRect(1374, 439, 27, 29),
+            "comment-2" => new PixelRect(1325, 566, 37, 37),
+            "reply-2" => new PixelRect(1374, 685, 27, 27),
+            "1" => new PixelRect(162, 181, 84, 60),
+            "2" => new PixelRect(162, 270, 84, 58),
+            "3" => new PixelRect(162, 357, 84, 58),
+            "4" => new PixelRect(162, 445, 84, 58),
+            "5" => new PixelRect(162, 532, 84, 58),
+            "6" => new PixelRect(162, 618, 84, 56),
+            "7" => new PixelRect(162, 698, 84, 56),
+            "8" => new PixelRect(162, 780, 84, 55),
+            _ => default
+        };
+        if (region.Width == 0 || !File.Exists(path)) return null;
+        if (!_sources.TryGetValue(path, out var source)) _sources[path] = source = new Bitmap(path);
+        return new CroppedBitmap { Source = source, SourceRect = region };
     }
     public void Dispose() { foreach (var source in _sources.Values) source.Dispose(); _sources.Clear(); }
 }

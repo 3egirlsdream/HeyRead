@@ -60,6 +60,10 @@ deliverables/
 *.3[gG][pP]
 *.[mM]2[tT][sS]
 
+# Source artwork for the macOS client
+!/desktop/src/HeyRead.Desktop/Assets/app-icon.png
+!/desktop/docs/design/compact-reader.png
+
 # Archives may contain media; deliverables remain local.
 *.[zZ][iI][pP]
 *.7[zZ]

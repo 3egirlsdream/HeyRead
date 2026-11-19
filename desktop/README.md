@@ -1,6 +1,6 @@
 # 小黑盒Community For Mac
 
-Avalonia 12.1.6 / .NET SDK 10.0.201 / macOS 15+. Independent macOS client on the selected **A · 原生紧凑** design. Android sources and upstream history are preserved. Upstream research baseline: `2f4e8b1e16a0baf4c934448162524de1d2483d47`.
+Avalonia 12.1.6 / .NET SDK 10.0.201 / macOS 15+. Independent macOS client with a [compact reading layout](docs/design/compact-reader.png). Android sources and upstream history are preserved. Upstream research baseline: `2f4e8b1e16a0baf4c934448162524de1d2483d47`.
 
 ## Build and run
 
@@ -22,12 +22,12 @@ For an isolated real-data run, set `HEYREAD_TEST_ROOT` to a dedicated absolute d
 ./scripts/package-macos.sh osx-x64
 ```
 
-Produces `xiaoheihe-community-formac.app`, update ZIP and DMG files in `desktop/artifacts/`. Both Apple Silicon and Intel native bridges compile against the macOS 15 deployment target. The default signature is ad hoc. To sign and notarize, provide `XIAOHEIHE_SIGN_IDENTITY` and `XIAOHEIHE_NOTARY_PROFILE`; these are optional local environment variables, never committed. The default GitHub artifacts are not Developer ID notarized.
+Produces `xiaoheihe-community-formac.app`, update ZIP and DMG files in `desktop/artifacts/`. Both Apple Silicon and Intel native bridges compile against the macOS 15 deployment target. Local development and desktop CI use ad hoc signatures by default. Set `XIAOHEIHE_SIGN_IDENTITY` to a Developer ID Application identity in your keychain to sign the app and DMG. Set `XIAOHEIHE_NOTARY_PROFILE` to an existing `notarytool` keychain profile to submit and staple both. `XIAOHEIHE_SIGN_KEYCHAIN` optionally selects the keychain that holds the signing identity and notary profile.
 
 ## Implementation
 
 - **Core**: signed public requests, account request isolation, feed/search/destination pagination, Steam game search and announcements, QR session protocol, cloud folders/history/following, social request forms, bounded HTML/rich block parsing, Android-compatible block-rule interchange, local library.
-- **Desktop**: constructor-injected MVVM composition, shared light/dark theme, Fluent icons, virtualized story list, draggable reader/list split, compact navigation at 900×640, typed navigation with query/scope/game/selection and three scroll offsets, bounded back/forward caching, account-scoped text drafts, image gallery, native media and settings.
+- **Desktop**. The floating navigation dock uses LiquidGlassAvaloniaUI for live blur and refraction over the feed. Search and feed controls are available from the dock. Selecting a feed tab refreshes its content. The virtualized list supports pull-to-refresh at the top and pagination at the bottom. The window starts with a compact feed. Selecting an article expands the window to the right while retaining the feed width and scroll position. Close the reader from its title tab or with Escape. Articles flow into comments in the same scroll view, with inline replies, account-scoped drafts, an image gallery and native media playback.
 - **Native**: Apple Translation via a SwiftUI-hosted `translationTask` (macOS 15 API), AVPlayerView, animated NSImageView, NSSharingServicePicker, isolated WKWebView verification, and one-use official Tencent CAPTCHA callbacks for public requests.
 - **Resources**: simplified/traditional Chinese, English and French base UI resources. Server errors/content retain their original language; navigation, settings, confirmations and translation states share matching resource keys. Server content retains its original language.
 
@@ -57,7 +57,13 @@ The macOS product is `xiaoheihe-community-formac`, displayed as **小黑盒Commu
 
 `desktop/Version.props` is the sole release version source. Increasing its numeric X.Y.Z version and committing to `main` starts `.github/workflows/macos-release.yml`. It runs tests, creates arm64/x64 self-contained apps, signs every Mach-O inside out, verifies ZIPs, and publishes the complete `mac-vX.Y.Z` Release only after all seven assets are uploaded. Recommitting the same published version is a no-op; downgrades are rejected. Android tags remain independent.
 
-The release pipeline uses the same ad hoc website-signing baseline as FKFinder. `XIAOHEIHE_SIGN_IDENTITY` and `XIAOHEIHE_NOTARY_PROFILE` enable optional local Developer ID signing/notarization; no Developer ID private key is exported by this project. Automatic update manifests are additionally ECDSA-P256 signed using the repository's `MACOS_UPDATE_SIGNING_KEY` Actions secret. Only its public key is included in the app/repository. Keep that private key backed up securely; replacing it requires an explicit public-key migration.
+The release workflow runs on `main` and requires the following Actions secrets.
+
+- `MACOS_DEVELOPER_ID_P12_BASE64` and `MACOS_DEVELOPER_ID_P12_PASSWORD` hold a password-protected PKCS#12 export of the Developer ID Application identity for team `AXBYDPHN88`.
+- `MACOS_NOTARY_KEY`, `MACOS_NOTARY_KEY_ID` and `MACOS_NOTARY_ISSUER_ID` hold the App Store Connect team API key and its identifiers for Apple notarization.
+- `MACOS_UPDATE_SIGNING_KEY` signs the update manifest with ECDSA P-256. Keep the private key backed up securely. Replacing it requires a public-key migration.
+
+The release job uses a temporary runner keychain and checks the Developer ID team and stapled notarization tickets on the ZIP's app and the DMG before publishing. After configuring the secrets on GitHub, use **Run workflow** on `main` to publish an already committed, unpublished version.
 
 Clients check GitHub's stable releases at startup and through About/menu → Check for updates. Only a greater numeric version prompts for installation. Clicking automatic update downloads the process architecture's ZIP, verifies the pinned manifest signature and SHA-256, rejects unsafe archive paths, then verifies Bundle ID, version, architecture and code signature. A same-directory staging bundle is prepared before exit. The helper preserves a backup, replaces the app after the parent exits, launches the new version and waits for a validated startup receipt before deleting the backup. A failed launch restores the old app. Account/session files are never in the replacement bundle. Read-only disk-image locations must be moved to a writable installation location first.
 

@@ -33,7 +33,7 @@ public sealed class NavigationTranslationTests
     }
 
     [AvaloniaFact]
-    public async Task BackForwardAndRestartRestoreSearchScopeAndReadingPosition()
+    public async Task BackForwardRestoresReadingPositionAndRestartOpensTheFeed()
     {
         var root = Temp();
         try
@@ -46,7 +46,7 @@ public sealed class NavigationTranslationTests
             await vm.NavigateAsync("settings"); await vm.BackAsync();
             Assert.Equal("search", vm.Page); Assert.Equal("Sekiro", vm.Query); Assert.Equal("42", vm.SearchScope?.Id); Assert.Equal(420, vm.CurrentViewport.ArticleOffset); Assert.Equal(story.Key, vm.Article?.Story.Key);
             await vm.BackAsync(true); Assert.Equal("settings", vm.Page); await vm.BackAsync(); vm.SaveNavigation();
-            using var restored = Create(api, new LibraryStore(root), new ControlledTranslation()); await restored.InitializeAsync(); Assert.Equal(story.Key, restored.Article?.Story.Key); Assert.True(restored.CurrentViewport.ShowDetail); Assert.Equal(120, restored.CurrentViewport.ListOffset);
+            using var restored = Create(api, new LibraryStore(root), new ControlledTranslation()); await restored.InitializeAsync(); Assert.Null(restored.Article); Assert.False(restored.CurrentViewport.ShowDetail); Assert.Equal("Sekiro", restored.Query); Assert.Equal(120, restored.CurrentViewport.ListOffset);
         }
         finally { Directory.Delete(root, true); }
     }

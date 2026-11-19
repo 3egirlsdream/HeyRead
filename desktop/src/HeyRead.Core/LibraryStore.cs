@@ -13,8 +13,8 @@ public sealed record Preferences
     public bool RecordHistory { get; set; } = true;
     public bool RestoreNavigation { get; set; } = true;
     public double BodySize { get; set; } = 16;
-    public double LineHeight { get; set; } = 22;
-    public double ParagraphSpacing { get; set; } = 10;
+    public double LineHeight { get; set; } = 27;
+    public double ParagraphSpacing { get; set; } = 14;
     public string BodyFont { get; set; } = "System";
     public string UiFont { get; set; } = "System";
     public bool BlockingEnabled { get; set; } = true;
@@ -24,7 +24,7 @@ public sealed record Preferences
     public NavigationState? Navigation { get; set; }
     public string LastPage { get; set; } = "discover";
     public Story? LastStory { get; set; }
-    public double ListWidth { get; set; } = 432;
+    public double ListWidth { get; set; } = 344;
     public int VisualRevision { get; set; }
 }
 public sealed record HistoryEntry(Story Story, DateTimeOffset Viewed, double ArticleOffset = 0, double CommentOffset = 0);
@@ -48,6 +48,17 @@ public sealed class LibraryStore
             if (Preferences.BodySize == 17 && Preferences.LineHeight == 30) Preferences.LineHeight = 24;
             if (Preferences.ParagraphSpacing == 20) Preferences.ParagraphSpacing = 14;
             Preferences.VisualRevision = 2;
+        }
+        if (Preferences.VisualRevision < 3)
+        {
+            if (Preferences.ListWidth == 432) Preferences.ListWidth = 344;
+            Preferences.VisualRevision = 3;
+        }
+        if (Preferences.VisualRevision < 4)
+        {
+            if (Preferences.BodySize == 16 && Preferences.LineHeight == 22) Preferences.LineHeight = 27;
+            if (Preferences.ParagraphSpacing == 10) Preferences.ParagraphSpacing = 14;
+            Preferences.VisualRevision = 4;
         }
         Preferences.BodySize = Math.Clamp(Preferences.BodySize, 14, 26); Preferences.LineHeight = Math.Clamp(Preferences.LineHeight, Preferences.BodySize * 1.2, Preferences.BodySize * 2.4); Preferences.ParagraphSpacing = Math.Clamp(Preferences.ParagraphSpacing, 8, 40);
     }

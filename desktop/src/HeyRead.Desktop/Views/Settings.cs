@@ -13,14 +13,14 @@ public sealed partial class MainWindow
     private string _settingsTab = "appearance";
     private Control BuildSettings()
     {
-        var nav = Stack(6); nav.Margin = new(20, 24);
+        var nav = new WrapPanel { ItemSpacing = 5, LineSpacing = 5, Margin = new(12, 10, 12, 0) };
         foreach (var (id, text) in new[] { ("appearance", "外观"), ("reading", "阅读排版与字体"), ("data", "数据来源与缓存"), ("blocking", "内容屏蔽"), ("about", "关于及第三方说明") })
         {
             var tab = Button(T(text), () => { _settingsTab = id; Render(); }, id == _settingsTab ? "primary" : "flat");
             tab.Classes.Add("settingsTab");
             nav.Children.Add(tab);
         }
-        var content = Stack(24); content.Margin = new(28); content.MaxWidth = 700; content.HorizontalAlignment = HorizontalAlignment.Stretch;
+        var content = Stack(14); content.Margin = new(18); content.MaxWidth = 700; content.HorizontalAlignment = HorizontalAlignment.Stretch;
         var p = _vm.Prefs;
         switch (_settingsTab)
         {
@@ -76,7 +76,7 @@ public sealed partial class MainWindow
                 content.Children.Add(Group(Text("Avalonia 12.1.6 · .NET 10.0.201"), Text(T("基于 23ye/HeyRead 独立开发的 macOS 客户端。上游代码采用 MIT 许可证。"), 13), Button("GitHub", () => OpenUrl("https://github.com/3egirlsdream/HeyRead")), Button(T("上游项目"), () => OpenUrl("https://github.com/23ye/HeyRead"))));
                 content.Children.Add(Group(Text(T("第三方说明"), 17, true), Text(T("HeyRead · MIT\nAvalonia · MIT\n.NET · MIT\nCommunityToolkit.Mvvm · MIT\nAngleSharp · MIT\nQRCoder · MIT\nMicrosoft Fluent System Icons · MIT\nApple Translation、AVKit、AppKit 为系统框架。")), Text(T("FKFinder 用作界面与工程参考；新增组件独立实现。"), 12, muted: true))); break;
         }
-        var grid = Columns("200,*", nav, new ScrollViewer { Content = content }); return grid;
+        return new ScrollViewer { Content = Stack(4, nav, content) };
     }
     private Control Toggle(string label, bool value, Action<bool> set)
     {

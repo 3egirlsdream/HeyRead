@@ -27,6 +27,8 @@ namespace HeyRead.Desktop.Views;
 
 public sealed partial class MainWindow : Window
 {
+    private const double DockClearance = 78;
+    private bool HasReader => ReferenceEquals(_body.Content, _readingGrid) && _vm.Article != null;
     private readonly MainViewModel _vm;
     private readonly ImageService _images;
     private readonly GameDetailsService _gameDetails;
@@ -36,62 +38,114 @@ public sealed partial class MainWindow : Window
     private readonly AReferenceAssets _referenceAssets = new();
     private readonly Grid _root = new();
     private readonly ContentControl _body = new();
-    private readonly ContentControl _header = new();
-    private readonly ContentControl _sidebar = new();
     private readonly ContentControl _detail = new();
-    private readonly TextBlock _title = Text("", 17, true);
+    private readonly Border _readerPane = new() { CornerRadius = new(11), ClipToBounds = true };
     private readonly TextBlock _status = Text("", 12, muted: true);
-    private readonly TextBox _search = new() { MaxLength = 120, MinWidth = 190,  HorizontalAlignment = HorizontalAlignment.Stretch };
+    private TextBox? _pageSearch;
     private readonly ListBox _list = new();
     private readonly Grid _readingGrid = new();
     private readonly ContentControl _listHeader = new();
     private readonly ContentControl _listFooter = new();
-    private readonly ScrollViewer _readerScroll = new();
-    private bool _narrow, _showDetail, _rendering;
+    private readonly ContentControl _listLoading = new() { IsHitTestVisible = false };
+    private readonly ScrollViewer _readerScroll = new() { HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+    private bool _rendering;
     private string? _renderedKey;
-    private double _articleOffset, _commentOffset;
+    private double _articleOffset;
     public MainWindow(MainViewModel vm)
     {
         _vm = vm; DataContext = vm; _strings = new(vm.Prefs.Language); _images = new(Path.Combine(vm.Store.Root, "cache")); _gameDetails = new(vm.Api);
-        Title = _vm.VisualFixture ? ProductInfo.DisplayName + " — A 视觉样例" : ProductInfo.DisplayName; Width = 1280; Height = 800; MinWidth = 900; MinHeight = 640;
-        if (_vm.VisualFixture && Environment.GetEnvironmentVariable("HEYREAD_VISUAL_VIEWPORT") == "narrow") { Width = 900; Height = 640; }
-        WindowStartupLocation = WindowStartupLocation.CenterScreen; ExtendClientAreaToDecorationsHint = true; ExtendClientAreaTitleBarHeightHint = 48;
-        _root.ColumnDefinitions = new("210,*"); Content = _root; _root.Children.Add(_sidebar);
-        var main = new Grid { RowDefinitions = new("68,*,0") }; Grid.SetColumn(main, 1); _root.Children.Add(main);
-        _header.Content = BuildHeader(); main.Children.Add(_header); Grid.SetRow(_body, 1); main.Children.Add(_body);
-        var statusBorder = Brush(new Border { Child = _status, Padding = new Thickness(20, 4), BorderThickness = new Thickness(0, 1, 0, 0) }, Border.BorderBrushProperty, "Line"); Grid.SetRow(statusBorder, 2); main.Children.Add(statusBorder);
-        _list.ItemsSource = vm.Stories; _list.ItemTemplate = new FuncDataTemplate<Story>((s, _) => StoryRow(s!));
+        Title = _vm.VisualFixture ? ProductInfo.DisplayName + " — A 视觉样例" : ProductInfo.DisplayName; Width = CompactWindowWidth; Height = 730; MinWidth = MinimumCompactWidth; MinHeight = 520;
+        if (_vm.VisualFixture && Environment.GetEnvironmentVariable("HEYREAD_VISUAL_VIEWPORT") == "narrow") Height = 640;
+        WindowStartupLocation = WindowStartupLocation.CenterScreen; PlaceCompactWindow(); ExtendClientAreaToDecorationsHint = true; ExtendClientAreaTitleBarHeightHint = 30;
+        ApplyRendering(this);
+        _root.RowDefinitions = new("30,*");
+        Content = _root;
+        var dragStrip = Brush(new Border(), Border.BackgroundProperty, "Frame");
+        dragStrip.PointerPressed += (_, e) =>
+        {
+            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) BeginMoveDrag(e);
+        };
+        _root.Children.Add(dragStrip);
+        Grid.SetRow(_body, 1);
+        _root.Children.Add(_body);
+        Grid.SetRow(_dockAnchor, 1);
+        _root.Children.Add(_dockAnchor);
+        BuildDock();
+        _list.ItemsSource = vm.Stories;
+        _list.ItemTemplate = new FuncDataTemplate<Story>((story, _) => StoryRow(story));
+        _list.ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel { Margin = new(0, 0, 0, DockClearance) });
+        MountReadingGrid();
         _list.SelectionChanged += async (_, _) =>
         {
-            if (_rendering || _list.SelectedItem is not Story story) return;
-            SaveOffsets();
-            _showDetail = true;
-            await vm.SelectAsync(story);
-            if (_overviewRows != DirectoryOverview) Render();
-            else UpdateResponsive();
+            if (!_rendering && _list.SelectedItem is Story story) await OpenStoryAsync(story);
         };
-        _readerScroll.ScrollChanged += (_, _) => { if (_rendering || vm.Article == null) return; if (vm.CommentsMode) _commentOffset = _readerScroll.Offset.Y; else _articleOffset = _readerScroll.Offset.Y; ScheduleViewportSave(); };
-        _search.KeyDown += async (_, e) => { if (e.Key == Key.Enter) { SaveOffsets(); vm.Query = _search.Text ?? ""; _showDetail = false; await vm.SearchAsync(); e.Handled = true; } };
-        _search.TextChanged += (_, _) => vm.Query = _search.Text ?? "";
+        _readerScroll.ScrollChanged += (_, e) =>
+        {
+            if (!ReferenceEquals(e.Source, _readerScroll) || _rendering || vm.Article == null || !_readerScroll.IsEffectivelyVisible) return;
+            if (_pendingReaderOffset == null && _pendingCommentOffset == null && !_vm.DetailLoading)
+            {
+                _articleOffset = _readerScroll.Offset.Y;
+                ScheduleViewportSave();
+            }
+            QueuePagination();
+        };
         vm.ContentChanged += Render;
         vm.SettingsChanged += OnSettingsChanged;
         vm.PropertyChanged += OnViewModelChanged;
         SizeChanged += (_, e) =>
         {
             UpdateResponsive();
-            if (DirectoryOverview && (e.PreviousSize.Width >= 1180) != (e.NewSize.Width >= 1180))
-                _list.ItemTemplate = new FuncDataTemplate<Story>((story, _) => StoryRow(story));
-            if (!_rendering && _vm.Page is not ("settings" or "account" or "games")) RenderReader();
+
+            UpdateDock();
+            if (!_rendering && HasReader) RenderReader();
         }; KeyDown += OnKeys;
         if (Application.Current?.PlatformSettings is { } settings) settings.ColorValuesChanged += OnSystemColorsChanged;
         Opened += async (_, _) => { _notifications = new WindowNotificationManager(this) { MaxItems = 3, Position = NotificationPosition.BottomRight }; ApplyTheme(); _ = CheckAfterStartup(); await vm.InitializeAsync(); };
         Closing += (_, _) => { SaveOffsets(); vm.Store.SavePreferences(); };
-        Closed += (_, _) => { _updateLifetime.Cancel(); _updates.Dispose(); _viewportTimer?.Stop(); _navigationMotion?.Cancel(); _navigationMotion?.Dispose(); if (Application.Current?.PlatformSettings is { } settings) settings.ColorValuesChanged -= OnSystemColorsChanged; if (_listScroll != null) _listScroll.ScrollChanged -= OnListScrollChanged; vm.SettingsChanged -= OnSettingsChanged; vm.PropertyChanged -= OnViewModelChanged; vm.ContentChanged -= Render; _readerScroll.Content = null; vm.Suspend(); _images.Dispose(); _referenceAssets.Dispose(); };
-        ConfigureMenus(); ApplyTheme(); RenderSidebar(); Render();
+        Closed += (_, _) => { _updateLifetime.Cancel(); _updates.Dispose(); _viewportTimer?.Stop(); _pullTimer.Stop(); _navigationMotion?.Cancel(); _navigationMotion?.Dispose(); if (Application.Current?.PlatformSettings is { } settings) settings.ColorValuesChanged -= OnSystemColorsChanged; if (_listScroll != null) _listScroll.ScrollChanged -= OnListScrollChanged; vm.SettingsChanged -= OnSettingsChanged; vm.PropertyChanged -= OnViewModelChanged; vm.ContentChanged -= Render; _readerScroll.Content = null; vm.Suspend(); _images.Dispose(); _referenceAssets.Dispose(); };
+        ConfigureMenus(); ApplyTheme(); Render();
     }
-    private async Task Navigate(string page)
+    private static void ApplyRendering(Window window)
     {
-        SaveOffsets(); _showDetail = false; _renderedKey = null; _vm.SearchScope = null; await _vm.NavigateAsync(page); _search.Text = _vm.Query;
+        window.UseLayoutRounding = true;
+        RenderOptions.SetEdgeMode(window, EdgeMode.Antialias);
+        TextOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias);
+        TextOptions.SetBaselinePixelAlignment(window, BaselinePixelAlignment.Aligned);
+    }
+    private Task Navigate(string page, bool refresh = false)
+    {
+        SaveOffsets();
+        _vm.SearchScope = null;
+        return _vm.NavigateAsync(page, refresh: refresh);
+    }
+
+    private Task OpenStoryAsync(Story story)
+    {
+        SaveOffsets();
+        if (_vm.Article == null) _pendingListOffset ??= _listScroll?.Offset.Y;
+        return _vm.SelectAsync(story);
+    }
+
+    private void MountReadingGrid()
+    {
+        var listPanel = new Grid { RowDefinitions = new("Auto,*") };
+        listPanel.Children.Add(_listHeader);
+        var viewport = BuildListViewport();
+        Grid.SetRow(viewport, 1);
+        listPanel.Children.Add(viewport);
+        _listFooter.VerticalAlignment = VerticalAlignment.Bottom;
+        _listFooter.Margin = new(0, 0, 0, DockClearance);
+        Grid.SetRow(_listFooter, 1);
+        listPanel.Children.Add(_listFooter);
+        var border = Brush(new Border { Child = listPanel, CornerRadius = new(11), ClipToBounds = true }, Border.BackgroundProperty, "FeedSurface");
+        border.SizeChanged += (_, _) => UpdateDock();
+        _readingGrid.ColumnDefinitions = new("*,0,0");
+        _readingGrid.Margin = new(PaneInset);
+        _readingGrid.Children.Add(border);
+        _readerPane.Child = _detail;
+        Brush(_readerPane, Border.BackgroundProperty, "Surface");
+        Grid.SetColumn(_readerPane, 2);
+        _readingGrid.Children.Add(_readerPane);
     }
     private void Render()
     {
@@ -99,21 +153,13 @@ public sealed partial class MainWindow : Window
         try
         {
             var key = _vm.CurrentViewport.CacheKey;
-            if (_visiblePageKey != key) { _visiblePageKey = key; _renderedKey = null; _readerContentIdentity = null; _showDetail = _vm.CurrentViewport.ShowDetail; _pendingListOffset = _vm.CurrentViewport.ListOffset; AnimateNavigation(); }
-            _title.Text = T(_vm.Title); if (_search.Text != _vm.Query) _search.Text = _vm.Query; RenderSidebar();
-            if (_vm.Page is "settings" or "account" or "games") { _readerScroll.Content = null; _readerContentIdentity = null; }
+            if (_visiblePageKey != key) { _visiblePageKey = key; _renderedKey = null; _pendingListOffset = _vm.CurrentViewport.ListOffset; _pagesWithoutVisibleRows = 0; ResetListPull(); AnimateNavigation(); }
+            _pageSearch = null;
             if (_vm.Page == "settings") { _body.Content = BuildSettings(); return; }
             if (_vm.Page == "account") { _body.Content = BuildAccount(); return; }
             if (_vm.Page == "search" && string.IsNullOrWhiteSpace(_vm.CurrentViewport.Query)) { _body.Content = BuildSearchLanding(); return; }
             if (_vm.Page == "games") { _body.Content = BuildGames(); return; }
-            Detach(_listHeader); Detach(_list); Detach(_listFooter);
-            _readingGrid.Children.Clear(); _readingGrid.ColumnDefinitions = new($"{Math.Clamp(_vm.Prefs.ListWidth, 280, 480)},1,*");
-            var listPanel = new Grid { RowDefinitions = new("Auto,*,Auto") }; listPanel.Children.Add(_listHeader); Grid.SetRow(_list, 1); listPanel.Children.Add(_list); Grid.SetRow(_listFooter, 2); listPanel.Children.Add(_listFooter);
-            if (_vm.Loading && _vm.Stories.Count == 0) { var skeleton = BuildListSkeleton(); Grid.SetRow(skeleton, 1); listPanel.Children.Add(skeleton); }
-            var listBorder = Brush(new Border { Child = listPanel, BorderThickness = new Thickness(0, 0, 1, 0) }, Border.BorderBrushProperty, "Line"); _readingGrid.Children.Add(listBorder);
-            var splitter = new GridSplitter { Width = 1, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Brushes.Transparent }; Grid.SetColumn(splitter, 1); _readingGrid.Children.Add(splitter);
-            splitter.DragCompleted += (_, _) => { _vm.Prefs.ListWidth = Math.Clamp(_readingGrid.ColumnDefinitions[0].ActualWidth, 280, 480); _vm.SaveSettings(); };
-            Grid.SetColumn(_detail, 2); _readingGrid.Children.Add(_detail); _body.Content = _readingGrid;
+            _body.Content = _readingGrid;
             if (_overviewRows != DirectoryOverview)
             {
                 _overviewRows = DirectoryOverview;
@@ -121,26 +167,31 @@ public sealed partial class MainWindow : Window
             }
             _listHeader.Content = BuildListHeader();
             _listFooter.Content = BuildListFooter();
-            if (_vm.VisualFixture && !DirectoryOverview && (_showDetail || Bounds.Width >= 1120) && _vm.Article != null && _list.SelectedItem == null)
-                _list.SelectedItem = _vm.Stories.FirstOrDefault(x => x.Key == _vm.Article.Story.Key);
-            RenderReader();
+            _listLoading.Content = _vm.Loading && _vm.Stories.Count == 0 ? _listLoading.Content ?? BuildListSkeleton() : null;
+            var selected = _vm.Article?.Story.Key;
+            _list.SelectedItem = selected == null ? null : _vm.Stories.FirstOrDefault(story => story.Key == selected);
             UpdateResponsive();
+            RenderReader();
             _status.Text = _vm.Loading ? T("正在加载…") : _vm.Demo ? "离线演示内容 · 不代表在线资讯" : $"{_vm.Stories.Count} 篇内容" + (_vm.BlockedCount > 0 ? $" · 已屏蔽 {_vm.BlockedCount} 篇" : "");
         }
         finally
         {
             _rendering = false;
-            Dispatcher.UIThread.Post(() => { TrackListScroll(); if (!_vm.Loading && _pendingListOffset is { } offset && _listScroll != null) { _listScroll.Offset = new(0, offset); _pendingListOffset = null; } }, DispatcherPriority.Loaded);
+            UpdateResponsive();
+            _body.Margin = ReferenceEquals(_body.Content, _readingGrid) ? default : new(4, 4, 4, DockClearance);
+            UpdateDock();
+            QueuePagination();
         }
     }
-    private Control BuildListHeader()
+    private Control? BuildListHeader()
     {
-        var children = Stack(10); children.Margin = new(14, 18, 12, 10);
-        if (_vm.Page == "discover")
+        var children = Stack(8); children.Margin = new(12, 12, 12, 4);
+        if (_vm.Page is not ("discover" or "destination" or "search" or "dynamic" or "following"))
         {
-            var tabs = Row(6);
-            foreach (var (value, name) in new[] { ("all", "推荐"), ("news", "资讯") }) { var b = AsyncButton(T(name), async () => { _vm.Channel = value; await _vm.LoadAsync(); }, value == _vm.Channel ? "primary" : null); b.Height = 35; b.MinWidth = 70; b.FontSize = 16; tabs.Children.Add(b); }
-            children.Children.Add(tabs); var line = Line(); line.Margin = new(0, 6, 0, 0); children.Children.Add(line);
+            var title = Text(T(_vm.Title), 16, true);
+            var count = Text(_vm.Stories.Count.ToString(), 11, muted: true);
+            count.VerticalAlignment = VerticalAlignment.Center;
+            children.Children.Add(Columns("*,Auto", title, count));
         }
         if (_vm.Page is "dynamic" or "following")
         {
@@ -152,8 +203,7 @@ public sealed partial class MainWindow : Window
                 ToolTip.SetTip(tab, T(description));
                 tabs.Children.Add(tab);
             }
-            children.Margin = new(18, 9, 18, 0);
-            children.Spacing = 14;
+            children.Margin = new(12, 10, 12, 4);
             children.Children.Add(tabs);
             children.Children.Add(Line());
         }
@@ -173,7 +223,8 @@ public sealed partial class MainWindow : Window
         if (_vm.Page == "favorites") { var combo = new ComboBox { ItemsSource = _vm.Folders, ItemTemplate = new FuncDataTemplate<Folder>((f, _) => Text(T(f?.Name ?? ""))), SelectedItem = _vm.Folder ?? _vm.Folders.FirstOrDefault(), HorizontalAlignment = HorizontalAlignment.Stretch }; combo.SelectionChanged += async (_, _) => { if (!_vm.Loading && combo.SelectedItem is Folder f && f != _vm.Folder) { _vm.Folder = f; await _vm.LoadAsync(); } }; children.Children.Add(combo); }
         if (_vm.Page == "search")
         {
-            children.Children.Add(Text(_vm.SearchScope == null ? $"“{_vm.Query}”" : $"{_vm.SearchScope.Name} · {_vm.Query}", 14, true));
+            var search = _vm.CurrentViewport;
+            children.Children.Add(Text(search.SearchScope == null ? $"“{search.Query}”" : $"{search.SearchScope.Name} · {search.Query}", 14, true));
             if (_vm.SearchScope?.Kind == "topic") children.Children.Add(Text(T("在话题列表中分批匹配标题与摘要"), 11, muted: true));
         }
         if (_vm.Page == "destination" && _vm.Target is { } target)
@@ -185,27 +236,27 @@ public sealed partial class MainWindow : Window
             children.Children.Add(Row(6, AsyncButton(T("在此搜索"), async () => { _vm.SearchScope = target.Kind == "author" ? null : target; _vm.Query = ""; await _vm.NavigateAsync("search"); }), AsyncButton(T("屏蔽"), async () => { var kind = target.Kind switch { "author" => RuleKind.AUTHOR, "section" => RuleKind.SECTION, _ => RuleKind.TOPIC }; AddRule(new(kind, target.Id, target.Name, Source: Source.HEYBOX)); await Task.CompletedTask; })));
         }
         if (_vm.BlockedCount > 0 || _vm.Reveal) children.Children.Add(Button(T("显示已屏蔽内容"), () => _vm.Reveal = !_vm.Reveal, "flat"));
-        return children;
+        return children.Children.Count == 0 ? null : children;
     }
     private Control BuildListFooter()
     {
-        var stack = Stack(8); stack.Margin = new(16, 12);
+        var stack = Stack(5);
         if (_vm.Error.Length > 0)
         {
-            stack.Children.Add(Text(T(_vm.Error), 12)); stack.Children.Add(AsyncButton(T("重试"), () => _vm.LoadAsync(_vm.Stories.Count > 0)));
+            stack.Children.Add(Text(T(_vm.Error), 12)); stack.Children.Add(AsyncButton(T("重试"), () => _vm.LoadAsync(_vm.HasMore)));
             if (_vm.Error.Contains("验证")) stack.Children.Add(Button(T("官方验证入口"), Verify));
             if (_vm.Api.Session == null && _vm.Page is "favorites" or "following" or "cloudhistory") stack.Children.Add(AsyncButton(T("登录小黑盒"), LoginDialog));
         }
-        else if (_vm.Loading) stack.Children.Add(new ProgressBar { IsIndeterminate = true, Height = 3 });
-        else if (_vm.HasMore) stack.Children.Add(AsyncButton(T("加载更多"), () => _vm.LoadAsync(true)));
-        else if (_vm.Stories.Count == 0) stack.Children.Add(Text(T("暂无内容"), 14, muted: true));
+        else if (_vm.Loading && _vm.Stories.Count > 0) stack.Children.Add(new ProgressBar { IsIndeterminate = true, Height = 2 });
+        else if (!_vm.Loading && _vm.Stories.Count == 0) stack.Children.Add(Text(T("暂无内容"), 13, muted: true));
+        if (stack.Children.Count > 0) stack.Margin = new(12, 6);
         return stack;
     }
     private Control BuildListSkeleton()
     {
-        var stack = Stack(18); stack.Margin = new(17, 16); Avalonia.Automation.AutomationProperties.SetName(stack, T("正在加载…"));
+        var stack = Stack(10); stack.Margin = new(12, 8); Avalonia.Automation.AutomationProperties.SetName(stack, T("正在加载…"));
         Border Bar(double height, double width = double.NaN) => Brush(new Border { Height = height, Width = width, CornerRadius = new(6), HorizontalAlignment = double.IsNaN(width) ? HorizontalAlignment.Stretch : HorizontalAlignment.Left }, Border.BackgroundProperty, "Subtle");
-        for (var i = 0; i < 5; i++) stack.Children.Add(Columns("100,16,*", Bar(68), new Border(), Stack(12, Bar(14), Bar(12), Bar(10, 80))));
+        for (var i = 0; i < 8; i++) stack.Children.Add(Columns("68,10,*", Bar(46), new Border(), Stack(6, Bar(12), Bar(10), Bar(9, 80))));
         return new ScrollViewer { Content = stack, IsHitTestVisible = false };
     }
     private Control RenderBlock(ArticleBlock block, string[] gallery)
@@ -234,39 +285,71 @@ public sealed partial class MainWindow : Window
         }
         control.Margin = new(block.Kind == BlockKind.ListItem ? Math.Max(0, block.Level - 1) * 18 : 0, 0, 0, _vm.Prefs.ParagraphSpacing); return control;
     }
-    private SelectableTextBlock ReadingText(string text) => Ui.Brush(new SelectableTextBlock { Text = text, FontSize = _vm.Prefs.BodySize, LineHeight = _vm.Prefs.LineHeight, TextWrapping = TextWrapping.Wrap, FontFamily = ResolveFont(_vm.Prefs.BodyFont) }, SelectableTextBlock.ForegroundProperty, "Ink");
     private static readonly Dictionary<string, string> Emoji = LoadEmoji();
+    private static readonly Regex EmojiToken = new(@"\[[^\]\r\n]{1,40}\]", RegexOptions.Compiled);
     private static Dictionary<string, string> LoadEmoji()
     {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("HeyRead.Desktop.Resources.official_emojis.json")!;
         using var doc = JsonDocument.Parse(stream); return doc.RootElement.GetProperty("entries").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString()!);
     }
-    private Control RichText(ArticleBlock block)
+    private SelectableTextBlock ReadingText(string text, double? size = null, double? lineHeight = null) =>
+        Brush(new SelectableTextBlock
+        {
+            Text = text, FontSize = size ?? _vm.Prefs.BodySize, LineHeight = lineHeight ?? _vm.Prefs.LineHeight,
+            TextWrapping = TextWrapping.Wrap, FontFamily = ResolveFont(_vm.Prefs.BodyFont)
+        }, SelectableTextBlock.ForegroundProperty, "Ink");
+
+    private SelectableTextBlock RichText(ArticleBlock block, double? fontSize = null, double? lineHeight = null)
     {
-        var text = ReadingText(""); text.Inlines = new InlineCollection();
+        var size = fontSize ?? _vm.Prefs.BodySize;
+        var text = ReadingText("", size, lineHeight);
         var runs = block.Runs ?? [new RichRun(block.Text)];
         if (block.Kind == BlockKind.ListItem) runs = new[] { new RichRun((block.ListMarker ?? "•") + "  ") }.Concat(runs).ToArray();
+        var emojiSize = fontSize.HasValue ? size + 2 : size;
+        PopulateInlines(text, runs, emojiSize);
+        return text;
+    }
+
+    private void PopulateInlines(TextBlock text, IReadOnlyList<RichRun> runs, double emojiSize)
+    {
+        var inlines = new InlineCollection();
+        text.Inlines = inlines;
         foreach (var run in runs)
         {
-            if (run.ImageUrl != null && !_vm.Prefs.NoImages) { var image = new RemoteImage(_images, run.ImageUrl, 24) { Width = 24 }; ToolTip.SetTip(image, run.Text); text.Inlines.Add(new InlineUIContainer(image)); continue; }
+            if (run.ImageUrl != null && !_vm.Prefs.NoImages) { AddEmoji(run.ImageUrl, run.Text); continue; }
             var position = 0;
-            foreach (Match match in Regex.Matches(run.Text, @"\[[^\]\r\n]{1,40}\]"))
+            foreach (Match match in EmojiToken.Matches(run.Text))
             {
                 if (!Emoji.TryGetValue(match.Value, out var image) || _vm.Prefs.NoImages) continue;
                 Add(run.Text[position..match.Index], run);
-                var emoji = new RemoteImage(_images, image, 24) { Width = 24 }; ToolTip.SetTip(emoji, match.Value); text.Inlines.Add(new InlineUIContainer(emoji)); position = match.Index + match.Length;
+                AddEmoji(image, match.Value);
+                position = match.Index + match.Length;
             }
             Add(run.Text[position..], run);
         }
-        return text;
+        void AddEmoji(string url, string label)
+        {
+            var image = new RemoteImage(_images, url, emojiSize) { Width = emojiSize };
+            ToolTip.SetTip(image, label);
+            inlines.Add(new InlineUIContainer(image) { BaselineAlignment = BaselineAlignment.Center });
+        }
+
         void Add(string value, RichRun run)
         {
             if (value.Length == 0) return;
             if (run.Url != null)
             {
-                var link = Button("", () => OpenUrl(run.Url), "flat"); link.Content = Ui.Brush(Text(value, _vm.Prefs.BodySize), TextBlock.ForegroundProperty, "Accent"); link.MaxWidth = Math.Max(100, ReaderWidth - 50); link.Padding = new(0); link.FontSize = _vm.Prefs.BodySize; ToolTip.SetTip(link, run.Url); text.Inlines!.Add(new InlineUIContainer(link)); return;
+                var link = Button("", () => OpenUrl(run.Url), "flat");
+                link.Content = Ui.Brush(Text(value, text.FontSize), TextBlock.ForegroundProperty, "Accent");
+                link.MaxWidth = Math.Max(100, ReaderWidth - 64);
+                link.Padding = default;
+                link.MinHeight = 0;
+                link.FontSize = text.FontSize;
+                ToolTip.SetTip(link, run.Url);
+                inlines.Add(new InlineUIContainer(link) { BaselineAlignment = BaselineAlignment.Center });
+                return;
             }
-            text.Inlines!.Add(new Run(value) { FontWeight = run.Bold ? FontWeight.Bold : FontWeight.Normal, FontStyle = run.Italic ? FontStyle.Italic : FontStyle.Normal, FontFamily = run.Code ? new("Menlo, Monaco") : text.FontFamily });
+            inlines.Add(new Run(value) { FontWeight = run.Bold ? FontWeight.Bold : text.FontWeight, FontStyle = run.Italic ? FontStyle.Italic : FontStyle.Normal, FontFamily = run.Code ? new("Menlo, Monaco") : text.FontFamily });
         }
     }
     private NativeMenu? _nativeMenu;
@@ -286,64 +369,20 @@ public sealed partial class MainWindow : Window
     private readonly Dictionary<string, FontFamily> _fontFamilies = [];
     private FontFamily ResolveFont(string name)
     {
-        if (name == "System") return new("PingFang SC, Helvetica Neue, Arial"); if (name == "Serif") return new("Songti SC, Georgia"); if (name == "Mono") return new("Menlo, Monaco"); if (name == "Sans") return new("PingFang SC, Helvetica Neue");
+        if (name == "System") return (FontFamily)this.FindResource("DefaultUiFont")!; if (name == "Serif") return new("Songti SC, Georgia"); if (name == "Mono") return new("Menlo, Monaco"); if (name == "Sans") return new("PingFang SC, Helvetica Neue");
         var path = Path.Combine(_vm.Store.Root, "fonts", Path.GetFileName(name));
-        if (!File.Exists(path)) return new("PingFang SC, Helvetica Neue, Arial");
+        if (!File.Exists(path)) return (FontFamily)this.FindResource("DefaultUiFont")!;
         if (!_fontFamilies.TryGetValue(path, out var family)) _fontFamilies[path] = family = new(Native.RegisterFont(path) ?? "PingFang SC");
         return family;
     }
-    private void SwitchComments(bool value) { if (_vm.CommentsMode == value) return; SaveOffsets(); _vm.CommentsMode = value; Render(); }
-    private Control BuildComments()
-    {
-        var stack = Stack(14); stack.Margin = new(20, 18);
-        stack.Children.Add(Text(_vm.Article?.Story.Title ?? T("评论"), 24, true));
-        stack.Children.Add(Row(12, Button(T("正文"), () => SwitchComments(false), "flat"), Brush(Text(T("评论") + " " + (_vm.Article?.CommentCount ?? _vm.Comments.Count), 16, true), TextBlock.ForegroundProperty, "Accent")));
-        stack.Children.Add(Line());
-        if (_vm.Comments.Count == 0) stack.Children.Add(Text(_vm.Api.Session == null ? "登录后查看完整评论" : T("暂无内容"), 13, muted: true));
-        var gallery = _vm.Comments.SelectMany(comment => new[] { comment }.Concat(comment.Replies)).ToArray();
-        foreach (var c in _vm.Comments) stack.Children.Add(CommentView(c, gallery));
-        if (_vm.CommentsError.Length > 0) stack.Children.Add(Text(T(_vm.CommentsError), 13));
-        if (_vm.MoreComments || _vm.CommentsError.Length > 0) stack.Children.Add(AsyncButton(T("加载更多"), _vm.MoreCommentsAsync)); return stack;
-    }
-    private Task OpenCommentImage(IReadOnlyList<Comment> thread, Comment selected, int index)
-    {
-        var offset = 0;
-        foreach (var comment in thread)
-        {
-            if (ReferenceEquals(comment, selected)) break;
-            offset += comment.Images.Count;
-        }
-        return ImageViewer(thread.SelectMany(comment => comment.Images).ToArray(), offset + index);
-    }
-    private Control CommentView(Comment c, IReadOnlyList<Comment> gallery, bool reply = false)
-    {
-        var name = Button(c.Author.Name, () => { if (c.Author.Id.Length > 0) Run(() => _vm.NavigateAsync("destination", new("author", c.Author.Id, c.Author.Name))); }, "flat"); name.Padding = new(0);
-        var body = Stack(8, Row(8, name, Text(c.Date, 11, muted: true)), RichText(new(BlockKind.Paragraph, c.Text)));
-        for (var i = 0; i < c.Images.Count; i++)
-        {
-            var index = i;
-            if (_vm.Prefs.NoImages)
-                body.Children.Add(AsyncButton(T("图片 · 点击查看"), () => OpenCommentImage(gallery, c, index), "flat"));
-            else
-            {
-                var image = new RemoteImage(_images, c.Images[i], 150);
-                image.Tapped += (_, _) => Run(() => OpenCommentImage(gallery, c, index));
-                body.Children.Add(image);
-            }
-        }
-        var supported = c.Supported; var supports = c.Supports; Button? support = null;
-        support = AsyncButton($"{(supported ? "✓" : "↑")} {supports}", async () => { if (_vm.Api.Session == null) { await LoginDialog(); if (_vm.Api.Session == null) return; } try { await _vm.SocialAsync("support", c with { Supported = supported, Supports = supports }); supported = !supported; supports = Math.Max(0, supports + (supported ? 1 : -1)); support!.Content = $"{(supported ? "✓" : "↑")} {supports}"; } catch (Exception e) { await Notice(e.Message); } }, "flat");
-        body.Children.Add(Row(8, AsyncButton(T("回复"), () => CommentDialog(c), "flat"), support));
-        if (!reply) { foreach (var child in c.Replies) body.Children.Add(CommentView(child, gallery, true)); body.Children.Add(AsyncButton(T("查看楼中楼"), async () => { await RepliesDialog(c); }, "flat")); }
-        var border = Brush(new Border { Child = Columns("32,12,*", Avatar(_vm.Prefs.NoImages ? null : c.Author.Avatar, 32), new Border(), body), Padding = new(reply ? 16 : 0, 0, 0, 18), BorderThickness = new(0, 0, 0, 1) }, Border.BorderBrushProperty, "Line"); return border;
-    }
-    private Control EmptyReader() => new Border { Child = Stack(12, Icons.Get("book_open", 40), Text(T("选择一篇文章开始阅读"), 16, muted: true)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private CancellationTokenSource? _navigationMotion;
+    private bool AllowMotion => _vm.Prefs.Animations && (!OperatingSystem.IsMacOS() || Native.hr_reduce_motion() == 0);
+
     private void AnimateNavigation()
     {
         _navigationMotion?.Cancel(); _navigationMotion?.Dispose(); _navigationMotion = null;
         _body.Transitions = null; _body.Opacity = 1;
-        if (!IsVisible || !_vm.Prefs.Animations || OperatingSystem.IsMacOS() && Native.hr_reduce_motion() != 0) return;
+        if (!IsVisible || !AllowMotion) return;
         _navigationMotion = new();
         var animation = new Animation { Duration = TimeSpan.FromMilliseconds(120), Easing = new CubicEaseOut() };
         animation.Children.Add(new KeyFrame { Cue = new Cue(0), Setters = { new Avalonia.Styling.Setter(OpacityProperty, 0d) } });
@@ -368,67 +407,109 @@ public sealed partial class MainWindow : Window
         var ink = app.ActualThemeVariant == ThemeVariant.Dark ? Color.FromRgb((byte)(accent.R * .55 + 255 * .45), (byte)(accent.G * .55 + 255 * .45), (byte)(accent.B * .55 + 255 * .45)) : accent;
         app.Resources["Accent"] = new SolidColorBrush(ink);
         FontFamily = ResolveFont(_vm.Prefs.UiFont);
+        app.Resources["ActiveButtonFont"] = _vm.Prefs.UiFont == "System" ? app.FindResource("DefaultButtonFont") : FontFamily;
         if (!_vm.Prefs.Animations) { _navigationMotion?.Cancel(); _body.Opacity = 1; }
     }
     private static double Linear(byte channel) { var value = channel / 255.0; return value <= .04045 ? value / 12.92 : Math.Pow((value + .055) / 1.055, 2.4); }
     private void OnSystemColorsChanged(object? sender, Avalonia.Platform.PlatformColorValues e) => Dispatcher.UIThread.Post(ApplyTheme);
     private bool IsDirectoryPage => _vm.Page is "dynamic" or "following" || _vm.Page == "destination" && _vm.Target?.Kind == "author";
-    private bool DirectoryOverview => IsDirectoryPage && !_showDetail;
+    private bool DirectoryOverview => IsDirectoryPage;
     private bool _overviewRows;
-    private void ReturnToList()
+
+    private void CloseReader()
     {
         SaveOffsets();
-        _showDetail = false;
-        _list.SelectedItem = null;
-        Render();
+        _pendingListOffset ??= _listScroll?.Offset.Y;
+        _vm.CloseArticle();
     }
+
     private void UpdateResponsive()
     {
-        _narrow = Bounds.Width < 1120;
-        if (_vm.Page is "settings" or "account" or "games") return;
-        if (_readingGrid.Children.Count < 3) return;
-        if (DirectoryOverview)
-        {
-            _readingGrid.ColumnDefinitions[0].Width = new(1, GridUnitType.Star);
-            _readingGrid.ColumnDefinitions[1].Width = new(0);
-            _readingGrid.ColumnDefinitions[2].Width = new(0);
-            _readingGrid.Children[0].IsVisible = true;
-            _readingGrid.Children[1].IsVisible = false;
-            _detail.IsVisible = false;
-            return;
-        }
-        var list = _readingGrid.Children[0]; var splitter = _readingGrid.Children[1];
-        list.IsVisible = !_narrow || !_showDetail; splitter.IsVisible = !_narrow; _detail.IsVisible = !_narrow || _showDetail;
-        _readingGrid.ColumnDefinitions[0].Width = _narrow ? _showDetail ? new(0) : new(1, GridUnitType.Star) : new(Math.Clamp(_vm.Prefs.ListWidth, 280, 480));
-        _readingGrid.ColumnDefinitions[1].Width = new(_narrow ? 0 : 1); _readingGrid.ColumnDefinitions[2].Width = _narrow && !_showDetail ? new(0) : new(1, GridUnitType.Star);
+        var split = HasReader;
+        MatchWindowToReader(split);
+        _readerPane.IsVisible = split;
+        _readingGrid.ColumnDefinitions[0].Width = split ? new(FeedColumnWidth) : new(1, GridUnitType.Star);
+        _readingGrid.ColumnDefinitions[1].Width = new(split ? PaneGap : 0);
+        _readingGrid.ColumnDefinitions[2].Width = split ? new(1, GridUnitType.Star) : new(0);
     }
-    private static void Detach(Control control) { if (control.Parent is Panel p) p.Children.Remove(control); else if (control.Parent is ContentControl c) c.Content = null; else if (control.Parent is Border b) b.Child = null; }
+
     private WindowNotificationManager? _notifications;
     private ScrollViewer? _listScroll;
     private DispatcherTimer? _viewportTimer;
     private string? _visiblePageKey;
     private double? _pendingListOffset;
+    private bool _paginationQueued;
+    private int _pagesWithoutVisibleRows;
     private void TrackListScroll()
     {
         var scroll = _list.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(); if (scroll == _listScroll) return;
         if (_listScroll != null) _listScroll.ScrollChanged -= OnListScrollChanged; _listScroll = scroll;
         if (_listScroll != null) _listScroll.ScrollChanged += OnListScrollChanged;
     }
-    private void OnListScrollChanged(object? sender, ScrollChangedEventArgs e) { if (!_rendering && !_vm.Loading) ScheduleViewportSave(); }
+    private void OnListScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (!ReferenceEquals(e.Source, _listScroll) || _rendering) return;
+        if (!_vm.Loading && _pendingListOffset == null && e.OffsetDelta.Y != 0) ScheduleViewportSave();
+        QueuePagination();
+    }
+    private void QueuePagination()
+    {
+        if (_paginationQueued) return;
+        _paginationQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _paginationQueued = false;
+            if (!IsVisible || !ReferenceEquals(_body.Content, _readingGrid)) return;
+            TrackListScroll();
+            if (_listScroll is { IsEffectivelyVisible: true } list && !_vm.Loading)
+            {
+                if (_pendingListOffset is { } offset && list.Viewport.Height > 0)
+                {
+                    _pendingListOffset = null;
+                    list.Offset = new(0, offset);
+                }
+                if (_pullDistance == 0 && _vm.HasMore && _vm.Error.Length == 0 && _pagesWithoutVisibleRows < 4 && NearEnd(list))
+                {
+                    var count = _vm.Stories.Count;
+                    var last = _vm.Stories.LastOrDefault()?.Key;
+                    var page = _visiblePageKey;
+                    Run(async () =>
+                    {
+                        await _vm.LoadAsync(true);
+                        if (page == _visiblePageKey)
+                            _pagesWithoutVisibleRows = count == _vm.Stories.Count && last == _vm.Stories.LastOrDefault()?.Key
+                                ? _pagesWithoutVisibleRows + 1 : 0;
+                    });
+                }
+            }
+            RestoreReaderOffset();
+            if (_commentsSection.Content != null && _readerScroll.IsEffectivelyVisible && _vm.MoreComments &&
+                !_vm.CommentsLoading && _vm.CommentsError.Length == 0 && NearEnd(_readerScroll))
+                Run(_vm.MoreCommentsAsync);
+            LoadRepliesNearViewport();
+        }, DispatcherPriority.Background);
+    }
+    private static bool NearEnd(ScrollViewer scroll) =>
+        scroll.Viewport.Height > 0 && scroll.Extent.Height - scroll.Offset.Y - scroll.Viewport.Height <= 136;
     private void ScheduleViewportSave()
     {
         if (_viewportTimer == null) { _viewportTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) }; _viewportTimer.Tick += (_, _) => { _viewportTimer.Stop(); SaveOffsets(); }; }
         _viewportTimer.Stop(); _viewportTimer.Start();
     }
-    private void SaveOffsets() => _vm.SaveViewport(_listScroll?.Offset.Y ?? _vm.CurrentViewport.ListOffset, _articleOffset, _commentOffset, _showDetail);
+    private void SaveOffsets()
+    {
+        if (_pendingCommentOffset != null || _pendingReaderOffset != null) return;
+        var listOffset = _pendingListOffset ?? _listScroll?.Offset.Y ?? _vm.CurrentViewport.ListOffset;
+        _vm.SaveViewport(listOffset, _articleOffset, 0, HasReader);
+    }
     private void OnSettingsChanged()
     {
-        _strings = new(_vm.Prefs.Language); ApplyTheme(); ConfigureMenus(); Detach(_search); _header.Content = BuildHeader(); RenderSidebar(); _list.ItemTemplate = new FuncDataTemplate<Story>((s, _) => StoryRow(s));
+        _strings = new(_vm.Prefs.Language); ApplyTheme(); ConfigureMenus(); BuildDock(); _list.ItemTemplate = new FuncDataTemplate<Story>((story, _) => StoryRow(story));
     }
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(_vm.Toast) && _vm.Toast.Length > 0) _notifications?.Show(new Notification(ProductInfo.DisplayName, T(_vm.Toast), NotificationType.Information, TimeSpan.FromSeconds(4)));
-        if (e.PropertyName is nameof(_vm.Loading) or nameof(_vm.DetailLoading) or nameof(_vm.CommentsMode) or nameof(_vm.Translating)) Render();
+        if (e.PropertyName is nameof(_vm.Loading) or nameof(_vm.DetailLoading) or nameof(_vm.Translating)) Render();
     }
     private async Task Social(string action, Comment? comment = null, string? expectedStory = null) { if (_vm.VisualFixture) { _vm.Toast = "离线样例不执行账号操作"; return; } if (_vm.Api.Session == null) { await LoginDialog(); if (_vm.Api.Session == null) return; } if (expectedStory != null && _vm.Article?.Story.Key != expectedStory) return; try { await _vm.SocialAsync(action, comment); } catch (Exception e) { await Notice(e.Message); } }
     private async void Run(Func<Task> action) { try { await action(); } catch (OperationCanceledException) { } catch (Exception e) { Console.Error.WriteLine(e); _status.Text = e.Message; await Notice(e.Message); } }
@@ -436,7 +517,7 @@ public sealed partial class MainWindow : Window
     private void Verify() => Native.Verify(_vm.Article?.Story.Url ?? "https://www.xiaoheihe.cn/");
     private void OnKeys(object? sender, KeyEventArgs e)
     {
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Meta)) { switch (e.Key) { case Key.W: Close(); e.Handled = true; break; case Key.F: _search.Focus(); e.Handled = true; break; case Key.R: Run(() => _vm.LoadAsync()); e.Handled = true; break; case Key.OemComma: Run(() => Navigate("settings")); e.Handled = true; break; case Key.Left: Run(async () => { SaveOffsets(); await _vm.BackAsync(); }); e.Handled = true; break; case Key.Right: Run(async () => { SaveOffsets(); await _vm.BackAsync(true); }); e.Handled = true; break; } }
-        if (e.Key == Key.Escape && (_narrow || IsDirectoryPage) && _showDetail) { ReturnToList(); e.Handled = true; }
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Meta)) { switch (e.Key) { case Key.W: Close(); e.Handled = true; break; case Key.F: if (_pageSearch is { IsEffectivelyVisible: true } search) search.Focus(); else Run(OpenDockSearchAsync); e.Handled = true; break; case Key.R: Run(RefreshDockPageAsync); e.Handled = true; break; case Key.OemComma: Run(() => Navigate("settings")); e.Handled = true; break; case Key.Left: Run(async () => { SaveOffsets(); await _vm.BackAsync(); }); e.Handled = true; break; case Key.Right: Run(async () => { SaveOffsets(); await _vm.BackAsync(true); }); e.Handled = true; break; } }
+        if (e.Key == Key.Escape && HasReader) { CloseReader(); e.Handled = true; }
     }
 }

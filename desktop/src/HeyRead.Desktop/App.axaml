@@ -1,55 +1,119 @@
-<Application xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="HeyRead.Desktop.App" RequestedThemeVariant="Default">
+<Application xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:sys="using:System" x:Class="HeyRead.Desktop.App" RequestedThemeVariant="Default">
 <Application.Resources><ResourceDictionary><ResourceDictionary.ThemeDictionaries>
 <ResourceDictionary x:Key="Light">
-<SolidColorBrush x:Key="Surface">#FFFFFF</SolidColorBrush><SolidColorBrush x:Key="Sidebar">#F1F3F6</SolidColorBrush><SolidColorBrush x:Key="Subtle">#F6F7F9</SolidColorBrush><SolidColorBrush x:Key="Line">#DFE3E9</SolidColorBrush><SolidColorBrush x:Key="Ink">#151922</SolidColorBrush><SolidColorBrush x:Key="Muted">#697386</SolidColorBrush><SolidColorBrush x:Key="Selection">#DFE9FD</SolidColorBrush>
+<Color x:Key="DockGlassColor">#4DFFFFFF</Color>
+<sys:Double x:Key="DockHighlightOpacity">1</sys:Double>
+<SolidColorBrush x:Key="DockInk">#151618</SolidColorBrush>
+<SolidColorBrush x:Key="DockHover">#0A171A1D</SolidColorBrush>
+<SolidColorBrush x:Key="DockSelection">#18171A1D</SolidColorBrush>
+<SolidColorBrush x:Key="DockPressed">#24171A1D</SolidColorBrush>
+<SolidColorBrush x:Key="DockFocus">#535963</SolidColorBrush>
+<LinearGradientBrush x:Key="DockGlassEdge" StartPoint="0%,0%" EndPoint="28%,100%">
+  <GradientStop Offset="0" Color="#FFFFFFFF"/><GradientStop Offset=".46" Color="#8EFFFFFF"/><GradientStop Offset="1" Color="#5F9DADB9"/>
+</LinearGradientBrush>
+<SolidColorBrush x:Key="Surface">#FFFFFF</SolidColorBrush><SolidColorBrush x:Key="Frame">#E4E4E3</SolidColorBrush><SolidColorBrush x:Key="Sidebar">#E5E5E4</SolidColorBrush><SolidColorBrush x:Key="FeedSurface">#F9F9F8</SolidColorBrush><SolidColorBrush x:Key="FeedCard">#EEEEED</SolidColorBrush><SolidColorBrush x:Key="Subtle">#F5F6F7</SolidColorBrush><SolidColorBrush x:Key="Line">#E8E8E8</SolidColorBrush><SolidColorBrush x:Key="ControlLine">#D5D6D8</SolidColorBrush><SolidColorBrush x:Key="Ink">#20242A</SolidColorBrush><SolidColorBrush x:Key="Muted">#626B78</SolidColorBrush><SolidColorBrush x:Key="Selection">#DFE0E2</SolidColorBrush>
 </ResourceDictionary>
 <ResourceDictionary x:Key="Dark">
-<SolidColorBrush x:Key="Surface">#1C1D20</SolidColorBrush><SolidColorBrush x:Key="Sidebar">#24262B</SolidColorBrush><SolidColorBrush x:Key="Subtle">#27292F</SolidColorBrush><SolidColorBrush x:Key="Line">#393D46</SolidColorBrush><SolidColorBrush x:Key="Ink">#F0F1F4</SolidColorBrush><SolidColorBrush x:Key="Muted">#A1AABB</SolidColorBrush><SolidColorBrush x:Key="Selection">#263D64</SolidColorBrush>
+<Color x:Key="DockGlassColor">#7025272B</Color>
+<sys:Double x:Key="DockHighlightOpacity">0.65</sys:Double>
+<SolidColorBrush x:Key="DockInk">#F7F7F8</SolidColorBrush>
+<SolidColorBrush x:Key="DockHover">#14FFFFFF</SolidColorBrush>
+<SolidColorBrush x:Key="DockSelection">#27FFFFFF</SolidColorBrush>
+<SolidColorBrush x:Key="DockPressed">#35FFFFFF</SolidColorBrush>
+<SolidColorBrush x:Key="DockFocus">#CBD1DA</SolidColorBrush>
+<LinearGradientBrush x:Key="DockGlassEdge" StartPoint="0%,0%" EndPoint="28%,100%">
+  <GradientStop Offset="0" Color="#9EFFFFFF"/><GradientStop Offset=".55" Color="#2BFFFFFF"/><GradientStop Offset="1" Color="#685B6475"/>
+</LinearGradientBrush>
+<SolidColorBrush x:Key="Surface">#1D1E21</SolidColorBrush><SolidColorBrush x:Key="Frame">#161719</SolidColorBrush><SolidColorBrush x:Key="Sidebar">#26272A</SolidColorBrush><SolidColorBrush x:Key="FeedSurface">#232427</SolidColorBrush><SolidColorBrush x:Key="FeedCard">#2B2D31</SolidColorBrush><SolidColorBrush x:Key="Subtle">#27292D</SolidColorBrush><SolidColorBrush x:Key="Line">#393D46</SolidColorBrush><SolidColorBrush x:Key="ControlLine">#505764</SolidColorBrush><SolidColorBrush x:Key="Ink">#F0F1F4</SolidColorBrush><SolidColorBrush x:Key="Muted">#A1AABB</SolidColorBrush><SolidColorBrush x:Key="Selection">#393D45</SolidColorBrush>
 </ResourceDictionary>
 </ResourceDictionary.ThemeDictionaries><SolidColorBrush x:Key="Accent">#2563EB</SolidColorBrush><SolidColorBrush x:Key="AccentFill">#2563EB</SolidColorBrush><SolidColorBrush x:Key="OnAccent">White</SolidColorBrush>
+<FontFamily x:Key="DefaultUiFont">PingFang SC, Apple Color Emoji, Segoe UI, Helvetica Neue, Arial</FontFamily>
+<FontFamily x:Key="DefaultButtonFont">Helvetica Neue, PingFang SC, Segoe UI, Arial</FontFamily>
 <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
-<Setter Property="Background" Value="{DynamicResource Surface}"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="9"/><Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+<Setter Property="Background" Value="{DynamicResource Surface}"/><Setter Property="BorderBrush" Value="{DynamicResource ControlLine}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="6"/><Setter Property="Foreground" Value="{DynamicResource Ink}"/>
 <Setter Property="HorizontalContentAlignment" Value="Center"/><Setter Property="VerticalContentAlignment" Value="Center"/>
 <Setter Property="Template"><ControlTemplate><ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" RecognizesAccessKey="True"/></ControlTemplate></Setter>
 </ControlTheme>
 </ResourceDictionary></Application.Resources>
 <Application.Styles><FluentTheme />
-<Style Selector="Window"><Setter Property="Background" Value="{DynamicResource Surface}"/><Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="FontFamily" Value="PingFang SC, Helvetica Neue, Arial"/><Setter Property="FontSize" Value="14"/></Style>
+<Style Selector="Window"><Setter Property="Background" Value="{DynamicResource Frame}"/><Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="FontFamily" Value="{StaticResource DefaultUiFont}"/><Setter Property="FontSize" Value="13"/></Style>
 <Style Selector="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Style><Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource Muted}"/></Style>
-<Style Selector="Button"><Setter Property="MinHeight" Value="32"/><Setter Property="Padding" Value="12,5"/><Setter Property="FontSize" Value="14"/></Style>
+<Style Selector="Button"><Setter Property="FontFamily" Value="{DynamicResource ActiveButtonFont}"/><Setter Property="MinHeight" Value="30"/><Setter Property="Padding" Value="10,3"/><Setter Property="FontSize" Value="13"/></Style>
 <Style Selector="Button:pointerover"><Setter Property="Background" Value="{DynamicResource Subtle}"/></Style><Style Selector="Button:pressed"><Setter Property="Opacity" Value="0.75"/></Style><Style Selector="Button:disabled"><Setter Property="Opacity" Value="0.45"/></Style><Style Selector="Button:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/></Style>
 <Style Selector="Button.flat"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/></Style>
-<Style Selector="Button.nav"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="Height" Value="42"/><Setter Property="Padding" Value="14,6"/><Setter Property="CornerRadius" Value="11"/></Style>
-<Style Selector="Button.nav.selected"><Setter Property="Background" Value="{DynamicResource Selection}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></Style><Style Selector="Button.nav.selected:pointerover"><Setter Property="Background" Value="{DynamicResource Selection}"/></Style>
+<Style Selector="Button.flat:pointerover"><Setter Property="Background" Value="{DynamicResource Subtle}"/></Style>
+<Style Selector="Button.dockItem">
+  <Setter Property="Height" Value="50"/><Setter Property="MinHeight" Value="50"/>
+  <Setter Property="CornerRadius" Value="25"/><Setter Property="Padding" Value="1,3"/>
+  <Setter Property="VerticalAlignment" Value="Center"/>
+  <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+  <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="2"/>
+  <Setter Property="BorderBrush" Value="Transparent"/>
+  <Setter Property="FocusAdorner" Value="{x:Null}"/>
+</Style>
+<Style Selector="Button.dockItem:pointerover:not(.selected)">
+  <Setter Property="Background" Value="{DynamicResource DockHover}"/>
+</Style>
+<Style Selector="Button.dockItem.selected">
+  <Setter Property="Background" Value="{DynamicResource DockSelection}"/>
+</Style>
+<Style Selector="Button.dockItem:pressed">
+  <Setter Property="Background" Value="{DynamicResource DockPressed}"/>
+  <Setter Property="Opacity" Value="1"/>
+</Style>
+<Style Selector="Button.dockItem:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource DockFocus}"/></Style>
+<Style Selector="TextBlock.dockCaption">
+  <Setter Property="FontFamily" Value="{DynamicResource ActiveButtonFont}"/>
+  <Setter Property="FontSize" Value="13"/><Setter Property="FontWeight" Value="Medium"/>
+  <Setter Property="Foreground" Value="{DynamicResource DockInk}"/>
+</Style>
 <Style Selector="Button.primary"><Setter Property="Background" Value="{DynamicResource AccentFill}"/><Setter Property="Foreground" Value="{DynamicResource OnAccent}"/><Setter Property="BorderThickness" Value="0"/></Style><Style Selector="Button.primary:pointerover"><Setter Property="Opacity" Value="0.88"/></Style>
 <Style Selector="Button.accentOutline"><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></Style>
-<Style Selector="TextBox"><Setter Property="MinHeight" Value="32"/><Setter Property="CornerRadius" Value="9"/><Setter Property="FontSize" Value="14"/></Style><Style Selector="TextBox.search"><Setter Property="Background" Value="{DynamicResource Subtle}"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/><Setter Property="Padding" Value="0,5,12,5"/></Style>
-<Style Selector="ComboBox"><Setter Property="MinHeight" Value="32"/><Setter Property="CornerRadius" Value="9"/><Setter Property="FontSize" Value="14"/></Style>
+<Style Selector="TextBox"><Setter Property="MinHeight" Value="32"/><Setter Property="CornerRadius" Value="6"/><Setter Property="FontSize" Value="14"/></Style><Style Selector="TextBox.search"><Setter Property="Background" Value="{DynamicResource Surface}"/><Setter Property="BorderBrush" Value="{DynamicResource ControlLine}"/><Setter Property="Padding" Value="0,0,8,0"/></Style>
+<Style Selector="TextBox.search /template/ TextBlock#PART_Placeholder"><Setter Property="Foreground" Value="{DynamicResource Muted}"/></Style>
+<Style Selector="ComboBox"><Setter Property="MinHeight" Value="32"/><Setter Property="CornerRadius" Value="6"/><Setter Property="FontSize" Value="14"/></Style>
 <Style Selector="ListBox"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="0,4,0,0"/></Style><Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style>
 <Style Selector="ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="Transparent"/></Style><Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="Transparent"/></Style>
-<Style Selector="ListBoxItem:pointerover Border.storyCard"><Setter Property="Background" Value="{DynamicResource Subtle}"/></Style><Style Selector="ListBoxItem:selected Border.storyCard"><Setter Property="Background" Value="{DynamicResource Selection}"/></Style>
-<Style Selector="Border.group"><Setter Property="Background" Value="{DynamicResource Subtle}"/><Setter Property="CornerRadius" Value="10"/><Setter Property="Padding" Value="16"/><Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/></Style>
+<Style Selector="Border.storyCard"><Setter Property="Background" Value="{DynamicResource FeedCard}"/></Style>
+<Style Selector="ListBoxItem:pointerover Border.storyCard"><Setter Property="Background" Value="{DynamicResource Line}"/></Style><Style Selector="ListBoxItem:selected Border.storyCard"><Setter Property="Background" Value="{DynamicResource Selection}"/></Style>
+<Style Selector="Border.group"><Setter Property="Background" Value="{DynamicResource Subtle}"/><Setter Property="CornerRadius" Value="8"/><Setter Property="Padding" Value="12"/><Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/></Style>
 <Style Selector="Button.sectionTab">
-  <Setter Property="MinWidth" Value="74"/><Setter Property="Height" Value="36"/>
-  <Setter Property="Padding" Value="12,3"/><Setter Property="FontSize" Value="16"/>
+  <Setter Property="MinWidth" Value="62"/><Setter Property="Height" Value="30"/>
+  <Setter Property="Padding" Value="8,0"/><Setter Property="FontSize" Value="13"/>
 </Style>
-<Style Selector="Button.readerSegment">
-  <Setter Property="Height" Value="26"/><Setter Property="MinHeight" Value="26"/>
-  <Setter Property="MinWidth" Value="65"/><Setter Property="Padding" Value="9,0"/>
-  <Setter Property="FontSize" Value="15"/><Setter Property="CornerRadius" Value="7"/>
-</Style>
-<Style Selector="Border.readerControlGroup">
-  <Setter Property="CornerRadius" Value="10"/><Setter Property="Padding" Value="4"/>
-  <Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
-  <Setter Property="Background" Value="{DynamicResource Surface}"/>
-</Style>
-<Style Selector="Button.typeSize">
+<Style Selector="Button.compactAction">
   <Setter Property="Height" Value="30"/><Setter Property="MinHeight" Value="30"/>
-  <Setter Property="MinWidth" Value="44"/><Setter Property="Padding" Value="6,0"/><Setter Property="FontSize" Value="16"/>
+  <Setter Property="Padding" Value="8,0"/><Setter Property="FontSize" Value="12"/>
+  <Setter Property="VerticalAlignment" Value="Center"/>
+</Style>
+<Style Selector="Button.compactAction.selected">
+  <Setter Property="Background" Value="{DynamicResource Selection}"/>
+  <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+</Style>
+<Style Selector="Button.iconOnly"><Setter Property="Padding" Value="0"/></Style>
+<Style Selector="Button.filterChip">
+  <Setter Property="Height" Value="26"/><Setter Property="MinHeight" Value="26"/>
+  <Setter Property="MinWidth" Value="44"/><Setter Property="FontSize" Value="12"/>
+  <Setter Property="Padding" Value="8,0"/>
+</Style>
+<Style Selector="Button.threadToggle">
+  <Setter Property="MinHeight" Value="21"/><Setter Property="Padding" Value="5,0"/>
+  <Setter Property="FontSize" Value="11"/><Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+</Style>
+<Style Selector="Button.commentAction">
+  <Setter Property="MinHeight" Value="23"/><Setter Property="Padding" Value="4,0"/>
+  <Setter Property="FontSize" Value="11"/>
+</Style>
+<Style Selector="Button.inlineCommentAction">
+  <Setter Property="MinHeight" Value="20"/><Setter Property="Padding" Value="3,0"/>
+</Style>
+<Style Selector="Button.commentName">
+  <Setter Property="MinHeight" Value="19"/><Setter Property="FontSize" Value="13"/>
+  <Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Padding" Value="0"/>
 </Style>
 <Style Selector="Button.settingsTab">
-  <Setter Property="Height" Value="42"/><Setter Property="HorizontalAlignment" Value="Stretch"/>
-  <Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="Padding" Value="14,6"/>
+  <Setter Property="Height" Value="34"/><Setter Property="HorizontalAlignment" Value="Stretch"/>
+  <Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="Padding" Value="9,0"/>
 </Style>
 <Style Selector="Border.accountLinks">
   <Setter Property="CornerRadius" Value="10"/><Setter Property="BorderThickness" Value="1"/>

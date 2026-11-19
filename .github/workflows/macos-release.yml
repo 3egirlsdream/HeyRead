@@ -6,11 +6,14 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+env:
+  MACOS_DEVELOPER_TEAM_ID: AXBYDPHN88
 concurrency:
   group: xiaoheihe-macos-release
   cancel-in-progress: false
 jobs:
   version:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       publish: ${{ steps.detect.outputs.publish }}
@@ -51,9 +54,48 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: desktop/global.json
-      - name: Package app, signed bundle, DMG and update ZIP
+      - name: Configure Developer ID signing and Apple notarization
+        env:
+          CERTIFICATE: ${{ secrets.MACOS_DEVELOPER_ID_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          : "${CERTIFICATE:?Missing MACOS_DEVELOPER_ID_P12_BASE64}"
+          : "${CERTIFICATE_PASSWORD:?Missing MACOS_DEVELOPER_ID_P12_PASSWORD}"
+          : "${NOTARY_KEY:?Missing MACOS_NOTARY_KEY}"
+          : "${NOTARY_KEY_ID:?Missing MACOS_NOTARY_KEY_ID}"
+          : "${NOTARY_ISSUER_ID:?Missing MACOS_NOTARY_ISSUER_ID}"
+          umask 077
+          keychain="$RUNNER_TEMP/heyread-release.keychain-db"
+          certificate="$RUNNER_TEMP/heyread-certificate.p12"
+          notary_key="$RUNNER_TEMP/heyread-notary.p8"
+          trap 'rm -f "$certificate" "$notary_key"' EXIT
+          printf '%s' "$CERTIFICATE" | base64 -D > "$certificate"
+          printf '%s\n' "$NOTARY_KEY" > "$notary_key"
+
+          keychain_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$keychain_password"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 7200 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$CERTIFICATE_PASSWORD" -f pkcs12 -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
+          identity="$(security find-identity -v -p codesigning "$keychain" |
+            awk -v team="$MACOS_DEVELOPER_TEAM_ID" '/"Developer ID Application:/ && index($0, "(" team ")") {print $2}')"
+          [[ "$identity" =~ ^[[:xdigit:]]{40}$ ]] || { echo 'Expected one valid Developer ID Application identity for this team' >&2; exit 1; }
+          xcrun notarytool store-credentials heyread-release --keychain "$keychain" \
+            --key "$notary_key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID"
+          {
+            printf 'XIAOHEIHE_SIGN_KEYCHAIN=%s\n' "$keychain"
+            printf 'XIAOHEIHE_SIGN_IDENTITY=%s\n' "$identity"
+            printf 'XIAOHEIHE_NOTARY_PROFILE=heyread-release\n'
+          } >> "$GITHUB_ENV"
+      - name: Package, sign and notarize the app and installer
         run: desktop/scripts/package-macos.sh '${{ matrix.rid }}'
-      - name: Verify update archive and architecture
+      - name: Verify Developer ID, notarization and architecture
         env:
           VERSION: ${{ needs.version.outputs.version }}
           RID: ${{ matrix.rid }}
@@ -63,7 +105,13 @@ jobs:
           mkdir -p "$verify"
           ditto -x -k "desktop/artifacts/xiaoheihe-community-formac-$VERSION-$RID.zip" "$verify"
           app="$verify/xiaoheihe-community-formac.app"
-          codesign --verify --deep --strict "$app"
+          dmg="desktop/artifacts/xiaoheihe-community-formac-$VERSION-$RID.dmg"
+          requirement="=anchor apple generic and certificate leaf[subject.OU] = \"$MACOS_DEVELOPER_TEAM_ID\" and certificate leaf[field.1.2.840.113635.100.6.1.13] exists"
+          codesign --verify --deep --strict -R "$requirement" "$app"
+          codesign --verify --strict -R "$requirement" "$dmg"
+          xcrun stapler validate "$app"
+          xcrun stapler validate "$dmg"
+          lipo "$app/Contents/MacOS/xiaoheihe-community-formac" -verify_arch "${RID#osx-}"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = com.3egirlsdream.xiaoheihe-community-formac
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$VERSION"
           if [ "$RID" = osx-x64 ]; then "$app/Contents/MacOS/xiaoheihe-community-formac" --version; fi
@@ -74,6 +122,11 @@ jobs:
             desktop/artifacts/*.zip
             desktop/artifacts/*.dmg
           if-no-files-found: error
+      - name: Remove the temporary signing keychain
+        if: always()
+        run: |
+          keychain="$RUNNER_TEMP/heyread-release.keychain-db"
+          if [[ -f "$keychain" ]]; then security delete-keychain "$keychain"; fi
   publish:
     needs: [version, tests, package]
     runs-on: ubuntu-latest

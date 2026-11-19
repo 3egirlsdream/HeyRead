@@ -412,13 +412,21 @@
           "AngleSharp": "[1.10.3, )"
         }
       },
+      "liquidglassavaloniaui": {
+        "type": "Project",
+        "dependencies": {
+          "Avalonia": "[12.1.6, )",
+          "Avalonia.Skia": "[12.1.6, )"
+        }
+      },
       "xiaoheihe-community-formac": {
         "type": "Project",
         "dependencies": {
           "Avalonia.Desktop": "[12.1.6, )",
           "Avalonia.Themes.Fluent": "[12.1.6, )",
           "CommunityToolkit.Mvvm": "[8.4.0, )",
-          "HeyRead.Core": "[0.3.0, )",
+          "HeyRead.Core": "[0.3.1, )",
+          "LiquidGlassAvaloniaUI": "[0.3.1, )",
           "QRCoder": "[1.7.0, )"
         }
       }

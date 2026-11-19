@@ -17,7 +17,8 @@ public sealed record Story(string Id, Source Source, string Title, string Excerp
 public sealed record Page<T>(IReadOnlyList<T> Items, bool HasMore, int NextOffset = 0, string? Cursor = null);
 public sealed record Game(int AppId, string Name, string? Image);
 public sealed record Folder(string Id, string Name) { public override string ToString() => Name; }
-public sealed record Comment(string Id, string RootId, string Text, Author Author, string Date, int Supports, bool Supported, IReadOnlyList<Comment> Replies, IReadOnlyList<string> Images);
+public sealed record Comment(string Id, string RootId, string Text, Author Author, string Date, int Supports, bool Supported,
+    IReadOnlyList<Comment> Replies, IReadOnlyList<string> Images, int? ChildCount = null, string? ReplyTo = null);
 public sealed record Article(Story Story, IReadOnlyList<Comment> Comments, bool HasMoreComments = false, string? AuthCode = null, bool? Liked = null, bool? Favorited = null, bool? Followed = null, int? LikeCount = null, int? CommentCount = null, string? CommentsError = null);
 public sealed record Session(string Cookie, string UserId, string Nickname, string Avatar)
 {

@@ -29,10 +29,10 @@ public sealed partial class MainWindow
     private Control BuildAccount()
     {
         var account = _vm.Api.Session;
-        var panel = Stack(26);
-        panel.Margin = new(24, 20, 24, 30);
-        if (!_vm.Prefs.NoImages) panel.Children.Add(Cover(182));
-        var identity = Stack(4, Text(account == null ? T("账号概览") : _vm.AccountName, 25, true));
+        var panel = Stack(16);
+        panel.Margin = new(18, 16, 18, 20);
+        if (!_vm.Prefs.NoImages) panel.Children.Add(Cover(128));
+        var identity = Stack(3, Text(account == null ? T("账号概览") : _vm.AccountName, 22, true));
         if (account != null)
         {
             var id = Button("ID · " + account.UserId, () => Run(async () =>
@@ -44,7 +44,7 @@ public sealed partial class MainWindow
             identity.Children.Add(Text(T("已登录小黑盒"), 14, muted: true));
         }
         else identity.Children.Add(AsyncButton(T("登录小黑盒"), LoginDialog, "primary"));
-        var profile = Row(18, Avatar(_vm.Prefs.NoImages ? null : account?.Avatar, 98), identity);
+        var profile = Row(12, Avatar(_vm.Prefs.NoImages ? null : account?.Avatar, 62), identity);
         if (account == null) panel.Children.Add(profile);
         else
         {
@@ -56,10 +56,12 @@ public sealed partial class MainWindow
         void Link(string icon, string label, Func<Task> open)
         {
             var b = AsyncButton("", open, "flat");
-            b.Height = 56;
-            b.Padding = new(24, 0, 16, 0);
+            b.Height = 40;
+            b.Padding = new(12, 0);
             b.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-            b.Content = Columns("52,*,20", Icons.Get(icon, 22), Text(T(label), 17, true), Icons.Get("chevron_right", 16, "Muted"));
+            var text = Text(T(label), 14, true);
+            text.VerticalAlignment = VerticalAlignment.Center;
+            b.Content = Columns("28,*,14", Icons.Get(icon, 17), text, Icons.Get("chevron_right", 13, "Muted"));
             links.Children.Add(b);
         }
         if (account != null)
@@ -81,12 +83,10 @@ public sealed partial class MainWindow
             {
                 if (await Confirm(T("退出登录"), "退出当前账号？本机历史与阅读偏好会保留。")) _vm.Logout();
             });
-            logout.MinWidth = 210;
-            logout.Height = 46;
-            logout.FontSize = 18;
+            logout.MinWidth = 126;
+            logout.Height = 32;
             logout.HorizontalAlignment = HorizontalAlignment.Center;
-            var actions = Stack(22, Line(), logout);
-            actions.Margin = new(0, 22, 0, 0);
+            var actions = Stack(12, Line(), logout);
             panel.Children.Add(actions);
         }
         return new ScrollViewer { Content = panel };
@@ -109,12 +109,12 @@ public sealed partial class MainWindow
         {
             var replay = AsyncButton("", () => _vm.ReplaySearchAsync(entry), "flat");
             replay.HorizontalContentAlignment = HorizontalAlignment.Left;
-            replay.Height = 51;
+            replay.Height = 38;
             replay.Padding = new(8, 0);
             var scope = entry.Steam ? "Steam" : entry.Scope?.Name ?? T("全站");
             var badge = Brush(new Border { Child = Text(scope, 14, muted: true), Padding = new(9, 2), CornerRadius = new(13) },
                 Border.BackgroundProperty, entry.Scope == null && !entry.Steam ? "Selection" : "Subtle");
-            replay.Content = Row(16, Icons.Get("search", 18, "Muted"), Text(entry.Query, 17, true), badge);
+            replay.Content = Row(9, Icons.Get("search", 15, "Muted"), Text(entry.Query, 14, true), badge);
             var remove = Button("×", () => { _vm.Store.RemoveSearch(entry); Render(); }, "flat");
             Avalonia.Automation.AutomationProperties.SetName(remove, T("删除记录") + " " + entry.Query);
             rows.Children.Add(Columns("*,40", replay, remove));
@@ -125,19 +125,20 @@ public sealed partial class MainWindow
 
     private Control BuildSearchLanding()
     {
-        var field = new TextBox { PlaceholderText = T("搜索文章、作者或游戏"), MaxLength = 120, MaxWidth = 668, Height = 56, FontSize = 19, VerticalContentAlignment = VerticalAlignment.Center };
+        var field = new TextBox { PlaceholderText = T("搜索文章、作者或游戏"), MaxLength = 120, MaxWidth = 668, Height = 40, FontSize = 15, VerticalContentAlignment = VerticalAlignment.Center };
         field.KeyDown += async (_, e) =>
         {
             if (e.Key != Key.Enter) return;
             e.Handled = true;
             _vm.Query = field.Text ?? "";
-            _search.Text = field.Text;
+            SaveOffsets();
             await _vm.SearchAsync();
         };
+        _pageSearch = field;
         var hero = new Grid();
         if (!_vm.Prefs.NoImages)
         {
-            var backdrop = Cover(260);
+            var backdrop = Cover(168);
             backdrop.CornerRadius = default;
             backdrop.OpacityMask = new LinearGradientBrush
             {
@@ -148,13 +149,13 @@ public sealed partial class MainWindow
             hero.Children.Add(backdrop);
         }
         Brush(field, TextBox.BackgroundProperty, "Surface");
-        field.InnerLeftContent = new Border { Child = Icons.Get("search", 24), Margin = new(12, 0, 10, 0) };
+        field.InnerLeftContent = new Border { Child = Icons.Get("search", 17), Margin = new(10, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
         field.VerticalAlignment = VerticalAlignment.Bottom;
         field.Margin = new(16, 14, 46, 12);
         hero.Children.Add(field);
-        var scopes = Row(14);
+        var scopes = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 6 };
         scopes.HorizontalAlignment = HorizontalAlignment.Center;
-        scopes.Margin = new(12, 10, 40, 0);
+        scopes.Margin = new(14, 10, 14, 0);
         var candidates = _vm.Store.History.SelectMany(item =>
             (item.Story.Sections ?? []).Select(section => new Destination("section", section.Id, section.Name))
             .Concat((item.Story.Topics ?? []).Select(topic => new Destination("topic", topic.Id, topic.Name))))
@@ -165,7 +166,7 @@ public sealed partial class MainWindow
             Child = new TextBlock { Text = "↵", FontSize = 18, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } },
             Border.BorderBrushProperty, "Line");
         var hint = Row(10, returnKey, Text(T("回车搜索"), 16, muted: true));
-        hint.Margin = new(22, 0, 0, 0);
+        hint.Margin = new(4, 0, 0, 0);
         void ShowTargets(string kind)
         {
             foreach (var (key, button) in scopeButtons)
@@ -195,21 +196,35 @@ public sealed partial class MainWindow
         scopes.Children.Add(target);
         scopes.Children.Add(hint);
         ShowTargets(_vm.SearchScope?.Kind ?? "");
-        var history = Stack(30, Line(), SearchHistory());
-        history.Margin = new(86, 30, 86, 24);
+        var history = Stack(16, Line(), SearchHistory());
+        history.Margin = new(18);
         return new ScrollViewer { Content = Stack(0, hero, scopes, history) };
     }
 
     private int? _previewGameId;
     private Control BuildGames()
     {
-        var sidebar = Stack(12, Text(T("Steam 游戏"), 19, true));
+        var field = new TextBox
+        {
+            Text = _vm.Query, PlaceholderText = T("输入游戏名称或 AppID，浏览 Steam 社区公告。"),
+            MaxLength = 120, VerticalContentAlignment = VerticalAlignment.Center
+        };
+        Avalonia.Automation.AutomationProperties.SetName(field, T("Steam 游戏"));
+        field.KeyDown += async (_, e) =>
+        {
+            if (e.Key != Key.Enter) return;
+            e.Handled = true;
+            SaveOffsets();
+            _vm.Query = field.Text ?? "";
+            await _vm.SearchAsync();
+        };
+        _pageSearch = field;
+        var sidebar = Stack(12, Text(T("Steam 游戏"), 19, true), field);
         sidebar.Margin = new(16);
         if (_vm.Loading) sidebar.Children.Add(new ProgressBar { IsIndeterminate = true, Height = 3 });
         if (_vm.Error.Length > 0) sidebar.Children.Add(Group(Text(_vm.Error), AsyncButton(T("重试"), () => _vm.LoadAsync())));
         if (_vm.Games.Count == 0)
         {
-            sidebar.Children.Add(Text(T("输入游戏名称或 AppID，浏览 Steam 社区公告。"), 14, muted: true));
             if (!_vm.Loading) sidebar.Children.Add(SearchHistory());
             return new ScrollViewer { Content = sidebar };
         }
@@ -218,11 +233,12 @@ public sealed partial class MainWindow
         results.ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<Game>((game, _) =>
         {
             if (game == null) return new Border();
-            var label = Stack(5, Text(game.Name, 15, true), Text($"AppID · {game.AppId}", 12, muted: true));
+            var label = Stack(3, Text(game.Name, 14, true), Text($"AppID · {game.AppId}", 11, muted: true));
+            label.VerticalAlignment = VerticalAlignment.Center;
             if (_vm.Prefs.NoImages) return label;
             if (_vm.Prefs.CardLayout == "Gallery") return Stack(8, Picture(game.Image, 132), label);
             if (_vm.Prefs.CardLayout == "Comfortable") return Columns("116,14,*", Picture(game.Image, 78, 116), new Border(), label);
-            return Columns("94,12,*", Picture(game.Image, 60, 94), new Border(), label);
+            return Columns("68,9,*", Picture(game.Image, 46, 68), new Border(), label);
         });
         results.SelectionChanged += (_, _) =>
         {

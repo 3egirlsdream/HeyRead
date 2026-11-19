@@ -38,3 +38,15 @@ Compare A pages 02, 07, 11 and 16 at 1280×800 logical points. The gallery inclu
 | Settings navigation | 42 high in both selected and unselected states |
 
 The layout regression test measures actual Avalonia control bounds in wide and narrow windows. System window chrome, generated game art, glyph metrics and live metadata can differ across screenshots.
+
+## Compact reader · 2026-11-19
+
+The [design board](docs/design/compact-reader.png) shows the same reading pane at two points on the scroll. The macOS implementation uses a 196-point sidebar, a resizable story list with a 344-point default, 48-point toolbars, 68 × 46 feed thumbnails, and 26/19-point root/reply avatars. The filters reflect the available feed channels. The [original app icon](src/HeyRead.Desktop/Assets/app-icon.png) is the source for the sidebar mark and the Dock icon.
+
+All 52 desktop tests passed. They exercise measured button alignment, feed and comment pagination, the comment jump target, draft recovery, and switching from a wide window to a narrow window with a selected article. The packaged arm64 app was checked in a light wide window and a dark narrow window using isolated sample data. Live account posts and Intel execution were outside this validation.
+
+### ImageGen prompts
+
+**Interface.** Generate a pixel-crisp flat front-on design board for an original macOS game news reader. Show two adjacent complete windows at two scroll stages, with a slim pale gray sidebar, a dense white feed and an editorial reader. Use centered outlined controls, 36-point navigation rows, 68 × 46 thumbnails on the left of compact two-line story rows, a Japanese game hero, and a fixed action bar with a comment jump. The second window shows the article ending above inline comments, with 26-point root avatars, 19-point reply avatars, aligned names and dates, and a single light vertical line beside the replies. Use PingFang-like Chinese text, cool grays and restrained blue accents.
+
+**Icon.** Generate one original, flat macOS Dock icon for HeyRead. Take the monochrome geometric mood from the official HeyBox icon. Center a black rounded square on transparent alpha and draw a white folded editorial page with two horizontal cutouts and a small speech tail. Keep it recognizable at 16 pixels. Exclude letters, hexagons, cubes and official branding.

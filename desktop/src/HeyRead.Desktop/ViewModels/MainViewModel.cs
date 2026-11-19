@@ -30,7 +30,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string _toast = ""; public string Toast { get => _toast; set => SetProperty(ref _toast, value); }
     private string _query = ""; public string Query { get => _query; set => SetProperty(ref _query, value); }
     private bool _hasMore; public bool HasMore { get => _hasMore; private set => SetProperty(ref _hasMore, value); }
-    private bool _commentsMode; public bool CommentsMode { get => _commentsMode; set => SetProperty(ref _commentsMode, value); }
     private bool _reveal; public bool Reveal { get => _reveal; set { if (SetProperty(ref _reveal, value)) ApplyFilter(); } }
     private string _translated = ""; public string Translated { get => _translated; private set => SetProperty(ref _translated, value); }
     private bool _translating; public bool Translating { get => _translating; private set => SetProperty(ref _translating, value); }
@@ -51,41 +50,38 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private CancellationTokenSource _feed = new(), _detail = new(), _translate = new();
     private int _navigationVersion;
     private int _offset, _commentPage = 1; private string? _cursor; private bool _moreComments;
-    public MainViewModel(HeyReadApi api, SteamService steam, LibraryStore store, ISessionStore sessions, ITranslationService translation) { Api = api; Steam = steam; Store = store; Sessions = sessions; _translation = translation; Comments.CollectionChanged += (_, _) => CommentsRevision++;
-        if (VisualFixture) { Prefs.ListWidth = Environment.GetEnvironmentVariable("HEYREAD_VISUAL_SCENE") == "reader" ? 335 : 432; Prefs.Theme = Environment.GetEnvironmentVariable("HEYREAD_VISUAL_THEME") ?? "Light"; Prefs.Accent = "Blue"; var defaults = new Preferences(); Prefs.BodySize = defaults.BodySize; Prefs.LineHeight = defaults.LineHeight; Prefs.ParagraphSpacing = defaults.ParagraphSpacing; Prefs.NoImages = false; Prefs.CardLayout = "Compact"; }
+    public MainViewModel(HeyReadApi api, SteamService steam, LibraryStore store, ISessionStore sessions, ITranslationService translation) { Api = api; Steam = steam; Store = store; Sessions = sessions; _translation = translation;
+        if (VisualFixture) { var defaults = new Preferences(); Prefs.ListWidth = defaults.ListWidth; Prefs.Theme = Environment.GetEnvironmentVariable("HEYREAD_VISUAL_THEME") ?? "Light"; Prefs.Accent = "Blue"; Prefs.BodySize = defaults.BodySize; Prefs.LineHeight = defaults.LineHeight; Prefs.ParagraphSpacing = defaults.ParagraphSpacing; Prefs.NoImages = false; Prefs.CardLayout = "Compact"; }
     }
     public async Task InitializeAsync()
     {
         var state = Prefs.RestoreNavigation && !VisualFixture ? (Prefs.Navigation ?? new NavigationState(Prefs.LastPage, SelectedStory: Prefs.LastStory)).Normalize() : new();
-        await RestoreAsync(state);
-        if (VisualFixture && Article == null && Stories.Count > 0) await SelectAsync(Stories[0]);
+        await RestoreAsync(state with { SelectedStory = null, ArticleOffset = 0, CommentOffset = 0, CommentsMode = false, ShowDetail = false });
     }
-    public async Task NavigateAsync(string page, Destination? target = null, Game? game = null, bool remember = true)
+    public async Task NavigateAsync(string page, Destination? target = null, Game? game = null, bool remember = true, bool refresh = false)
     {
         if (remember) { RememberCurrent(); PushBounded(_back, CommittedNavigation()); _forward.Clear(); }
-        await ShowPageAsync(new(page, target, game, Query, SearchScope, Channel, AuthorMoments, Folder));
+        await ShowPageAsync(new(page, target, game, Query, SearchScope, Channel, AuthorMoments, Folder), refresh);
     }
-    private async Task ShowPageAsync(NavigationState state)
+    private async Task ShowPageAsync(NavigationState state, bool refresh = false)
     {
         var navigationVersion = ++_navigationVersion;
-        state = state.Normalize(); Cancel(ref _feed); Cancel(ref _detail); Cancel(ref _translate);
-        DetailLoading = false; Translating = false; Article = null; DetailError = ""; ClearTranslation(); CommentsMode = false; _reveal = false;
+        state = state.Normalize(); Cancel(ref _feed); ClearArticle(); _reveal = false;
         Page = state.Page; Target = state.Target; Game = state.Game; Query = state.Query; SearchScope = state.SearchScope; Channel = state.Channel; AuthorMoments = state.AuthorMoments; Folder = state.Folder;
         AuthorPage = null; FollowingFilter = null; _restoreFollowingId = state.FollowingAuthorId; CurrentViewport = state;
         Title = Page switch { "discover" => "发现", "dynamic" => "推荐动态", "following" => "关注动态", "games" => "Steam 游戏", "news" => Game?.Name ?? "游戏公告", "favorites" => "云端收藏", "history" => "本机历史", "cloudhistory" => "账号历史", "search" => "搜索结果", "destination" => Target?.Name ?? "浏览", "account" => "账号概览", "settings" => "设置", _ => "盒阅" };
         if (Demo && !VisualFixture) Title += " · 离线演示";
         Prefs.LastPage = Page; ContentChanged?.Invoke();
-        if (_pageCache.TryGetValue(state.CacheKey, out var cached) && Page is not ("account" or "settings" or "history"))
+        if (!refresh && _pageCache.TryGetValue(state.CacheKey, out var cached) && Page is not ("account" or "settings" or "history"))
         {
             _raw.Clear(); _raw.AddRange(cached.Stories); AuthorPage = cached.Author; FollowingFilter = Following.FirstOrDefault(x => x.Id == _restoreFollowingId); _offset = cached.Offset; _cursor = cached.Cursor; HasMore = cached.HasMore; Loading = false; ApplyFilter();
         }
         else await LoadAsync();
         if (navigationVersion != _navigationVersion) return;
-        if (state.SelectedStory is { } story && Page is not ("account" or "settings" or "games"))
+        if (state.ShowDetail && state.SelectedStory is { } story && Page is not ("account" or "settings" or "games"))
         {
             await SelectAsync(Stories.FirstOrDefault(x => x.Key == story.Key) ?? story);
             if (navigationVersion != _navigationVersion) return;
-            CommentsMode = state.CommentsMode && Article?.Story.Source == Source.HEYBOX;
             ContentChanged?.Invoke();
         }
         SaveNavigation();
@@ -114,17 +110,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
     public async Task LoadAsync(bool more = false)
     {
-        if (Loading && more) return;
+        if (more && (Loading || !HasMore)) return;
         Loading = true;
         if (!more) { Cancel(ref _feed); _raw.Clear(); Stories.Clear(); Games.Clear(); _offset = 0; _cursor = null; HasMore = false; }
         var token = _feed.Token; var pageName = Page; Error = ""; Loading = true;
-        CurrentViewport = CurrentViewport with { Query = Query, SearchScope = SearchScope };
+        if (!more) CurrentViewport = CurrentViewport with { Query = Query, SearchScope = SearchScope, Channel = Channel, AuthorMoments = AuthorMoments, Folder = Folder };
         try
         {
             if (Page is "settings" or "account") return;
             if (Page == "history") { _raw.AddRange(Store.History.Select(x => x.Story)); HasMore = false; ApplyFilter(); return; }
-            if (Demo && Page is "discover" or "dynamic" or "destination" or "search") { _raw.AddRange(VisualFixture ? ADesignStories.Items : DemoStories.Items); HasMore = false; ApplyFilter(); if (Article == null) await SelectAsync(Stories.FirstOrDefault()); return; }
-            if (Page == "search" && string.IsNullOrWhiteSpace(Query)) return;
+            if (Demo && Page is "discover" or "dynamic" or "destination" or "search") { _raw.AddRange(VisualFixture ? ADesignStories.Items : DemoStories.Items); HasMore = false; ApplyFilter(); return; }
+            if (Page == "search" && string.IsNullOrWhiteSpace(CurrentViewport.Query)) return;
             if (Page == "games") { if (!string.IsNullOrWhiteSpace(Query)) { var games = await Steam.SearchAsync(Query, token); token.ThrowIfCancellationRequested(); foreach (var g in games) Games.Add(g); } return; }
             Page<Story> page;
             if (Page == "news" && Game != null) page = await Steam.NewsAsync(Game, _cursor, token);
@@ -133,7 +129,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 if (!more && Target.Kind == "author") { try { AuthorPage = await Api.ProfileAsync(Target.Id, token); } catch (Exception e) when (e is not OperationCanceledException) { Toast = e.Message; } }
                 page = await Api.DestinationAsync(Target, _offset, _cursor, AuthorMoments, token);
             }
-            else if (Page == "search") page = await Api.SearchAsync(Query.Trim(), _offset, SearchScope, _cursor, token);
+            else if (Page == "search") page = await Api.SearchAsync(CurrentViewport.Query.Trim(), _offset, CurrentViewport.SearchScope, _cursor, token);
             else if (Page is "favorites" or "cloudhistory" or "following")
             {
                 if (Page == "following" && !more) { Following.Clear(); Following.Add(new("", "全部关注")); foreach (var author in await Api.FollowingAsync(token)) Following.Add(author); FollowingFilter = Following.FirstOrDefault(x => x.Id == _restoreFollowingId); }
@@ -169,7 +165,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (story == null || Article?.Story.Key == story.Key) return;
         Cancel(ref _detail); Cancel(ref _translate); var token = _detail.Token;
-        ClearTranslation(); Translating = false; CommentsMode = false; CommentsLoading = false; CommentsError = ""; DetailError = ""; Article = new(story, []); Comments.Clear(); DetailLoading = true; ContentChanged?.Invoke();
+        ClearTranslation(); Translating = false; CommentsLoading = false; CommentsError = ""; _moreComments = false; DetailError = ""; Article = new(story, []); Comments.Clear(); DetailLoading = true; ContentChanged?.Invoke();
         if (IsArticleBlocked) { DetailLoading = false; ContentChanged?.Invoke(); return; }
         try
         {
@@ -178,7 +174,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 var fresh = await Steam.NewsAsync(new(appId, story.Author, story.Image), (published + 1).ToString(), token);
                 story = fresh.Items.FirstOrDefault(x => x.Key == story.Key) ?? story with { Notice = "公告当前不可用，已显示本机摘要，可打开原文继续阅读" };
             }
-            var article = story.Source == Source.DEMO ? new Article((VisualFixture ? ADesignStories.Items : DemoStories.Items).FirstOrDefault(x => x.Key == story.Key) ?? story, [], LikeCount: VisualFixture ? 128 : null, CommentCount: story.CommentCount) : await Api.ArticleAsync(story, token);
+            var article = story.Source == Source.DEMO ? new Article((VisualFixture ? ADesignStories.Items : DemoStories.Items).FirstOrDefault(x => x.Key == story.Key) ?? story, VisualFixture ? ADesignStories.Comments : [], LikeCount: VisualFixture ? 128 : null, CommentCount: story.CommentCount) : await Api.ArticleAsync(story, token);
             token.ThrowIfCancellationRequested(); Article = article; foreach (var c in article.Comments) Comments.Add(c); _commentPage = article.CommentsError == null ? 1 : 0; CommentsError = article.CommentsError ?? ""; _moreComments = article.HasMoreComments;
             Store.Visit(article.Story); Prefs.LastStory = LibraryStore.Summary(article.Story); SaveNavigation();
         }
@@ -187,25 +183,56 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         finally { if (!token.IsCancellationRequested) { DetailLoading = false; ContentChanged?.Invoke(); } }
     }
     public async Task RetryDetailAsync() { var story = Article?.Story; Article = null; await SelectAsync(story); }
+
+    public void CloseArticle()
+    {
+        if (Article == null) return;
+        CurrentViewport = CurrentViewport with { SelectedStory = null, ArticleOffset = 0, CommentOffset = 0, CommentsMode = false, ShowDetail = false };
+        ClearArticle();
+        SaveNavigation();
+        ContentChanged?.Invoke();
+    }
+
+    private void ClearArticle()
+    {
+        Cancel(ref _detail);
+        Cancel(ref _translate);
+        Article = null;
+        Comments.Clear();
+        _moreComments = false;
+        CommentsLoading = false;
+        CommentsError = "";
+        DetailError = "";
+        DetailLoading = false;
+        Translating = false;
+        ClearTranslation();
+    }
     public bool CommentsLoading { get; private set; }
     public string CommentsError { get; private set; } = "";
     public async Task MoreCommentsAsync()
     {
-        var story = Article?.Story; if (story == null || CommentsLoading || IsArticleBlocked) return;
+        var story = Article?.Story; if (story?.Source != Source.HEYBOX || DetailLoading || CommentsLoading || IsArticleBlocked || (!_moreComments && CommentsError.Length == 0)) return;
         var token = _detail.Token; CommentsLoading = true; CommentsError = ""; ContentChanged?.Invoke();
         try
         {
             var page = await Api.CommentsAsync(story, _commentPage + 1, ct: token);
             token.ThrowIfCancellationRequested(); if (Article?.Story.Key != story.Key) return;
-            foreach (var c in page.Items) if (!Comments.Any(x => x.Id == c.Id)) Comments.Add(c);
-            _commentPage++; _moreComments = page.HasMore;
+            var seen = Comments.Select(c => c.Id).ToHashSet();
+            var added = page.Items.Where(c => seen.Add(c.Id)).ToArray();
+            foreach (var c in added) Comments.Add(c);
+            _commentPage++; _moreComments = page.HasMore && added.Length > 0;
         }
         catch (OperationCanceledException) { }
         catch (Exception e) { if (!token.IsCancellationRequested) { CommentsError = e.Message; Toast = e.Message; Expired(e); } }
         finally { if (!token.IsCancellationRequested) { CommentsLoading = false; ContentChanged?.Invoke(); } }
     }
     public bool MoreComments => _moreComments;
-    public Task<Page<Comment>> RepliesAsync(Comment root, string? cursor = null) => Api.CommentsAsync(Article!.Story, 1, root.Id, cursor, _detail.Token);
+    public async Task<Page<Comment>> RepliesAsync(Comment root, string? cursor, CancellationToken ct)
+    {
+        if (Article is not { } article) throw new OperationCanceledException();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_detail.Token, ct);
+        return await Api.CommentsAsync(article.Story, 1, root.Id, cursor, cancellation.Token);
+    }
     public async Task SocialAsync(string action, Comment? reply = null, string? text = null)
     {
         var snapshot = Article; if (snapshot == null) return;
