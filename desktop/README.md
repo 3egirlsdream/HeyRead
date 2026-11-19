@@ -1,6 +1,17 @@
 # 小黑盒Community For Mac
 
-Avalonia 12.1.6 / .NET SDK 10.0.201 / macOS 15+. Independent macOS client with a [compact reading layout](docs/design/compact-reader.png). Android sources and upstream history are preserved. Upstream research baseline: `2f4e8b1e16a0baf4c934448162524de1d2483d47`.
+An independent macOS client for Heybox posts and Steam announcements, built with Avalonia 12.1.6 and .NET 10.
+
+## Install
+
+[macOS 0.3.1](https://github.com/3egirlsdream/HeyRead/releases/tag/mac-v0.3.1) requires macOS 15 or later. Both installers are signed with Apple Developer ID and notarized by Apple. Open the DMG and drag the app into Applications.
+
+| Mac | Installer |
+| --- | --- |
+| Apple Silicon | [Download arm64 DMG](https://github.com/3egirlsdream/HeyRead/releases/download/mac-v0.3.1/xiaoheihe-community-formac-0.3.1-osx-arm64.dmg) |
+| Intel | [Download x64 DMG](https://github.com/3egirlsdream/HeyRead/releases/download/mac-v0.3.1/xiaoheihe-community-formac-0.3.1-osx-x64.dmg) |
+
+The app opens in a compact feed window. Selecting a post opens the reader to the right while keeping the feed's width and scroll position. The Liquid Glass dock provides navigation and search. The native reader supports Chinese paragraph spacing and inline emoji, with comments and nested replies in the same scroll view. See the [0.3.1 release notes](RELEASE-NOTES.md) for the full change list.
 
 ## Build and run
 
@@ -48,14 +59,14 @@ dotnet run --project src/HeyRead.Desktop -- --probe-account
 
 The public probe performs read-only public API requests and creates a QR challenge, without logging its key or credentials. The account probe loads the local session and reports only counts and status, without credentials, identifiers or private content. Neither probe writes account interactions.
 
-See `docs/VALIDATION.md` for evidence and outstanding manual acceptance. A successful build or protocol fixture does not establish live posting, end-to-end translation, Intel execution, notarization, or pixel-for-pixel design acceptance.
+The [0.3.1 release run](https://github.com/3egirlsdream/HeyRead/actions/runs/44512446758) passed the desktop tests, verified notarization tickets on both architectures, and ran the self-contained Intel binary. See [validation notes](docs/VALIDATION.md) for the remaining manual checks.
 
 
 ## GitHub Release and automatic updates
 
 The macOS product is `xiaoheihe-community-formac`, displayed as **小黑盒Community For Mac**. Bundle ID: `com.3egirlsdream.xiaoheihe-community-formac`. The fork repository and Android project remain intact. Existing local account/history/font data stays under the legacy HeyRead data directory to preserve sign-in.
 
-`desktop/Version.props` is the sole release version source. Increasing its numeric X.Y.Z version and committing to `main` starts `.github/workflows/macos-release.yml`. It runs tests, creates arm64/x64 self-contained apps, signs every Mach-O inside out, verifies ZIPs, and publishes the complete `mac-vX.Y.Z` Release only after all seven assets are uploaded. Recommitting the same published version is a no-op; downgrades are rejected. Android tags remain independent.
+`desktop/Version.props` is the source of the release version. Updating it on `main` starts `.github/workflows/macos-release.yml`. The workflow runs tests, builds self-contained arm64 and x64 apps, signs and notarizes the apps and DMGs, then verifies the packaged signatures and tickets. It publishes the `mac-vX.Y.Z` release after all seven assets are ready, including the signed update manifest and SHA-256 checksums. An already published version is skipped. The workflow rejects downgrades and uses a separate tag prefix from Android.
 
 The release workflow runs on `main` and requires the following Actions secrets.
 
