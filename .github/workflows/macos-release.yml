@@ -48,7 +48,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rid: [osx-arm64, osx-x64]
+        include:
+          - rid: osx-arm64
+            arch: arm64
+          - rid: osx-x64
+            arch: x86_64
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-dotnet@v6
@@ -99,6 +103,7 @@ jobs:
         env:
           VERSION: ${{ needs.version.outputs.version }}
           RID: ${{ matrix.rid }}
+          ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
           verify="$RUNNER_TEMP/verify-update"
@@ -111,7 +116,8 @@ jobs:
           codesign --verify --strict -R "$requirement" "$dmg"
           xcrun stapler validate "$app"
           xcrun stapler validate "$dmg"
-          lipo "$app/Contents/MacOS/xiaoheihe-community-formac" -verify_arch "${RID#osx-}"
+          lipo "$app/Contents/MacOS/xiaoheihe-community-formac" -verify_arch "$ARCH"
+          lipo "$app/Contents/MacOS/libHeyReadNative.dylib" -verify_arch "$ARCH"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = com.3egirlsdream.xiaoheihe-community-formac
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$VERSION"
           if [ "$RID" = osx-x64 ]; then "$app/Contents/MacOS/xiaoheihe-community-formac" --version; fi
