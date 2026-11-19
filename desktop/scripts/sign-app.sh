@@ -10,5 +10,8 @@ while IFS= read -r -d '' binary; do
         codesign "${sign[@]}" "$binary"
     fi
 done < <(find "$app/Contents" -type f ! -name xiaoheihe-community-formac -print0)
+# The .NET runtime also puts managed files in Contents/MacOS, where codesign can treat them as nested code.
+# Seal those files before giving the main executable its entitlements.
+codesign "${sign[@]}" --deep "$app"
 codesign "${sign[@]}" --entitlements "$(dirname "$0")/../native/Website.entitlements" "$app"
 codesign --verify --deep --strict "$app"
