@@ -37,7 +37,7 @@ Produces `xiaoheihe-community-formac.app`, update ZIP and DMG files in `desktop/
 
 ## Implementation
 
-- **Core**: signed public requests, account request isolation, feed/search/destination pagination, Steam game search and announcements, QR session protocol, cloud folders/history/following, social request forms, bounded HTML/rich block parsing, Android-compatible block-rule interchange, local library.
+- **Core**: signed public requests, account request isolation, feed/search/destination pagination, Steam game search and announcements, QR session protocol, cloud folders/history/following, social request forms, bounded HTML/rich block parsing, JSON block-rule interchange, local library.
 - **Desktop**. The floating navigation dock uses LiquidGlassAvaloniaUI for live blur and refraction over the feed. Search and feed controls are available from the dock. Selecting a feed tab refreshes its content. The virtualized list supports pull-to-refresh at the top and pagination at the bottom. The window starts with a compact feed. Selecting an article expands the window to the right while retaining the feed width and scroll position. Close the reader from its title tab or with Escape. Articles flow into comments in the same scroll view, with inline replies, account-scoped drafts, an image gallery and native media playback.
 - **Native**: Apple Translation via a SwiftUI-hosted `translationTask` (macOS 15 API), AVPlayerView, animated NSImageView, NSSharingServicePicker, isolated WKWebView verification, and one-use official Tencent CAPTCHA callbacks for public requests.
 - **Resources**: simplified/traditional Chinese, English and French base UI resources. Server errors/content retain their original language; navigation, settings, confirmations and translation states share matching resource keys. Server content retains its original language.
@@ -64,9 +64,9 @@ The [0.3.1 release run](https://github.com/3egirlsdream/HeyRead/actions/runs/445
 
 ## GitHub Release and automatic updates
 
-The macOS product is `xiaoheihe-community-formac`, displayed as **小黑盒Community For Mac**. Bundle ID: `com.3egirlsdream.xiaoheihe-community-formac`. The fork repository and Android project remain intact. Existing local account/history/font data stays under the legacy HeyRead data directory to preserve sign-in.
+The macOS product is `xiaoheihe-community-formac`, displayed as **小黑盒Community For Mac**. Its bundle ID is `com.3egirlsdream.xiaoheihe-community-formac`. Account, history and font data stays under the legacy HeyRead data directory to preserve sign-in.
 
-`desktop/Version.props` is the source of the release version. Updating it on `main` starts `.github/workflows/macos-release.yml`. The workflow runs tests, builds self-contained arm64 and x64 apps, signs and notarizes the apps and DMGs, then verifies the packaged signatures and tickets. It publishes the `mac-vX.Y.Z` release after all seven assets are ready, including the signed update manifest and SHA-256 checksums. An already published version is skipped. The workflow rejects downgrades and uses a separate tag prefix from Android.
+`desktop/Version.props` is the source of the release version. Updating it on `main` starts `.github/workflows/macos-release.yml`. The workflow runs tests, builds self-contained arm64 and x64 apps, signs and notarizes the apps and DMGs, then verifies the packaged signatures and tickets. It publishes the `mac-vX.Y.Z` release after all seven assets are ready, including the signed update manifest and SHA-256 checksums. An already published version is skipped. The workflow rejects downgrades.
 
 The release workflow runs on `main` and requires the following Actions secrets.
 

@@ -1,7 +1,7 @@
 HeyRead macOS client
 Upstream: https://github.com/23ye/HeyRead, MIT License, copyright upstream contributors.
 Research baseline: 2f4e8b1e16a0baf4c934448162524de1d2483d47.
-Android project and upstream Git history retained.
+Upstream source is preserved in the Git history.
 
 Dependencies (MIT):
 Avalonia 12.1.6 https://github.com/AvaloniaUI/Avalonia

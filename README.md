@@ -1,174 +1,43 @@
-# 盒阅 · HeyRead
+# 小黑盒Community For Mac
 
-**今天，读点游戏故事。**
+用于浏览小黑盒社区内容和 Steam 游戏公告的 macOS 客户端。支持信息流、搜索、原生图文阅读和评论。
 
-盒阅是面向 Android 和 macOS 的游戏阅读客户端，可以浏览小黑盒内容与 Steam 游戏公告，并按自己的习惯调整阅读排版。
+这是独立第三方项目，与小黑盒或 Valve 无隶属关系。
 
-盒阅是独立第三方项目，与小黑盒、Valve 或 Google 无隶属关系。
+## 下载
 
-[macOS 下载](#macos) · [Android](#android) · [构建运行](#构建运行) · [数据与隐私](#数据与隐私) · [反馈与建议](#反馈与建议)
+**macOS 0.3.1** 支持 macOS 15 及以上。两种架构的安装包均采用 Apple Developer ID 签名并通过 Apple 公证。打开 DMG 后，将应用拖到「应用程序」。
 
-## macOS
-
-**小黑盒Community For Mac 0.3.1** 支持 macOS 15 及以上。两种架构的安装包均通过 Apple Developer ID 签名和 Apple 公证。打开 DMG 后，将应用拖到「应用程序」。
-
-[Apple Silicon 下载](https://github.com/3egirlsdream/HeyRead/releases/download/mac-v0.3.1/xiaoheihe-community-formac-0.3.1-osx-arm64.dmg) · [Intel 下载](https://github.com/3egirlsdream/HeyRead/releases/download/mac-v0.3.1/xiaoheihe-community-formac-0.3.1-osx-x64.dmg) · [发布说明与完整附件](https://github.com/3egirlsdream/HeyRead/releases/tag/mac-v0.3.1)
-
-- 默认打开窄窗信息流。点开文章时，右侧展开阅读区，左侧保留原来的宽度和滚动位置。
-- 底部液态玻璃导航整合发现、动态、游戏、搜索和账号入口。信息流支持下拉刷新与滚动加载。
-- 原生阅读区优化了中文长帖的分段、行距和行内表情。评论接在正文下方，楼中楼可就地展开。
-- 已安装的版本可从应用菜单检查更新。[macOS 构建、发布与数据说明](desktop/README.md)
-
-## Android
-
-Android 8.0+ · Kotlin · Jetpack Compose · Material 3
-
-### 功能介绍
-
-#### 发现与搜索
-
-- 浏览小黑盒推荐、资讯和社区内容，支持下拉刷新、分页与作者／分区／话题页面。
-- 关注动态与推荐分开展示，可通过关注头像选择作者，查看其动态和投稿。
-- 小黑盒全站及分区在线搜索，搜索记录保留原查询范围，支持重放、删除和清空。
-- 按游戏名或 AppID 查找 Steam 游戏，阅读对应的 Steam Community 公告。
-- Steam 英文公告可按需使用端侧英译中，并随时切回原文。
-
-#### 为阅读留出空间
-
-- 原生正文与评论页面，左右滑动切换，分别保留滚动位置。
-- 支持图文、引用、图注、官方表情、GIF、游戏资料卡片及可用的直链视频。
-- 正文图片按出现顺序组成图库，支持左右切换、缩放、原图查看、保存与系统分享。
-- 评论图片按已加载主评论与回复的顺序组成独立图库，支持准确定位、左右切换与缩放。
-- 正文和评论支持 Android 原生选字与复制。
-- A 柔和独立卡片、B 紧凑描边列表、C 大封面画廊三种布局，适用于发现、游戏、账号收藏和历史记录。
-
-#### 按自己的习惯阅读
-
-- 浅色、深色或跟随系统，提供经典黄、雾蓝、松绿、藤紫，以及 Android 12+ 壁纸动态配色。
-- **全局字体选择**：系统默认、无衬线、衬线、等宽，或导入 TTF／OTF／TTC 字体，用于界面与正文。
-- 独立调整正文的字号、行高与段间距，拖动时预览，结束后保存。
-- 关键词、作者、分区、话题四类内容屏蔽，支持快捷添加、临时显示及 JSON 规则导入／导出。
-- 无图模式、界面动效开关，以及明确标注的本机阅读历史。
-
-#### 账号与多设备布局
-
-- 小黑盒二维码登录，读取账号全文、评论、云端收藏和账号浏览历史。
-- 已接入喜欢、收藏、评论／回复、主评论点赞和作者关注；实际可用性受接口与账号状态影响，评论问题见下方限制。
-- 手机使用单栏导航；宽窗口自动切换列表／详情双栏，支持拖动调整栏宽。
-- 宽窄窗口切换保留页面与列表状态，设置分类同样适配双栏。
-
-### 使用说明
-
-打开应用后，可以先浏览公开内容；读取账号收藏、账号历史和部分完整内容时，需要登录小黑盒账号。
-
-- **调整阅读体验**：进入“我的 → 外观与阅读体验”，切换主题、卡片布局与全局字体，或调整正文排版。
-- **导入字体**：通过系统文件选择器选取 TTF／OTF／TTC 文件，应用保留字体副本，之后可切换或移除。
-- **管理内容屏蔽**：进入“我的 → 内容屏蔽”管理规则，也可从帖子卡片长按入口快捷添加；规则可导出为 JSON，并在导入时预览确认。
-- **阅读 Steam 公告**：进入游戏页，搜索游戏名或 AppID，选中游戏后查看公告；英文正文可按需翻译。
-- **查看原文与分享**：使用文章原文入口访问内容来源，图片可在全屏查看器中保存或打开系统分享面板。
-
-### 构建运行
-
-#### 环境
-
-| 项目 | 要求／版本 |
+| Mac | 安装包 |
 | --- | --- |
-| 运行系统 | Android 8.0（API 26）及以上 |
-| JDK | 17 或 21，编译目标为 Java 17 |
-| Android SDK | compileSdk／targetSdk 35 |
-| Kotlin／Compose 插件 | 2.1.20 |
-| Android Gradle Plugin | 8.9.1 |
-| Gradle Wrapper | 8.11.1 |
-| Compose BOM | 2025.04.01 |
+| Apple Silicon（M 系列） | [下载 arm64 DMG](https://github.com/3egirlsdream/HeyRead/releases/download/mac-v0.3.1/xiaoheihe-community-formac-0.3.1-osx-arm64.dmg) |
+| Intel | [下载 x64 DMG](https://github.com/3egirlsdream/HeyRead/releases/download/mac-v0.3.1/xiaoheihe-community-formac-0.3.1-osx-x64.dmg) |
 
-使用 Android Studio 打开仓库根目录，配置 JDK 和 Android SDK，完成 Gradle 同步后运行 `app`。首次构建需要联网下载依赖。SDK 路径可由 Android Studio 配置，或写入本机 `local.properties`，该文件不提交到仓库。
+已安装的版本可从应用菜单检查更新。更新包、校验文件和版本说明见 [GitHub Release](https://github.com/3egirlsdream/HeyRead/releases/tag/mac-v0.3.1)。
 
-首次构建前还需要 Python 3.9+，运行以下脚本，从 Google 官方来源获取翻译归属图片并核对 SHA-256：
+## 功能
 
-```bash
-python scripts/prepare_assets.py
+- 默认打开窄窗信息流。点开文章时，右侧展开阅读区，左侧保留原来的宽度和滚动位置。信息流支持下拉刷新和滚动加载。
+- 底部液态玻璃导航整合发现、动态、游戏、搜索和账号入口。可按全站、分区或话题搜索小黑盒内容，也可按游戏名或 AppID 查找 Steam 公告。
+- 正文使用原生排版，支持中文分段、行内表情、引用、图片图库和原生媒体播放。评论接在正文下方，楼中楼可就地展开。
+- 支持系统主题、无图模式和自定义字体。阅读设置可独立调整字号、行高和段距，并即时预览。
+- 可先浏览公开内容。登录小黑盒账号后，可读取账号收藏、历史和部分完整内容。账号会话以加密文件保存在本机。
+
+## 从源码运行
+
+需要 macOS 15 或更高版本、.NET SDK 10.0.201 和 Xcode 命令行工具。
+
+```sh
+cd desktop
+./scripts/build-native.sh
+dotnet restore HeyRead.slnx --locked-mode
+dotnet run --project src/HeyRead.Desktop
 ```
 
-图片仅生成在本机并被 Git 忽略，不随源码上传。请保留完整素材及归属说明；下载或校验失败时脚本会报错，此时不要直接继续编译。在 macOS／Linux 上可将 `python` 换成 `python3`。
+打包、自动更新、测试和数据存储说明见 [macOS 开发文档](desktop/README.md)。
 
-Windows PowerShell：
+## 反馈和许可
 
-```powershell
-# 确保 JAVA_HOME、PATH 与 Android SDK 路径配置正确
-.\gradlew.bat assembleDebug --no-parallel
-```
+反馈问题时请附应用版本、macOS 版本、Mac 型号及复现步骤。涉及账号的问题请先移除 Cookie、二维码、验证码票据和个人信息。
 
-macOS／Linux：
-
-```bash
-chmod +x gradlew
-./gradlew assembleDebug --no-parallel
-```
-
-Debug APK 输出到 `app/build/outputs/apk/debug/app-debug.apk`，应用包名为 `cn.heyread.app`。版本以 `app/build.gradle.kts` 为准。
-
-Release 构建使用 `assembleRelease`，已启用 R8 和资源压缩；公开分发前需自行配置签名。仓库不包含个人签名密钥或本机打包助手，不能直接复现维护者本机的签名流程。已发布安装包以仓库 Releases 页面实际提供的内容为准。
-
-#### GitHub 自动打包
-
-仓库提供 `.github/workflows/android-release.yml`：修改 `main` 中的应用源码、构建配置、脚本或工作流后自动运行；推送 `v*` 标签也会运行。也可以在 **Actions → Android release build → Run workflow** 手动构建。
-
-工作流使用 Java 21、Android SDK 35 与项目 Gradle Wrapper，先校验并准备翻译归属素材，再编译启用 R8／资源压缩的 Release。成功后在该次运行的 **Artifacts** 中下载 `heyread-release-…`，其中包含 APK、`SHA256SUMS.txt` 和 `build-info.json`；R8 mapping 单独保存，产物保留14天。工作流不自动发布 GitHub Releases。
-
-要生成**可以安装的已签名 APK**，请在仓库 **Settings → Secrets and variables → Actions → New repository secret** 中配置：
-
-| Secret 名称 | 内容 |
-| --- | --- |
-| `RELEASE_KEYSTORE_BASE64` | 固定发行 keystore 文件的 Base64 文本 |
-| `RELEASE_STORE_PASSWORD` | keystore 密码 |
-| `RELEASE_KEY_ALIAS` | 密钥别名 |
-| `RELEASE_KEY_PASSWORD` | 该密钥的密码 |
-
-可在自己的 PowerShell 中将 keystore 转成 Base64 并复制到剪贴板，然后粘贴到对应 Secret；路径替换为你自己的文件：
-
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes('C:\你的密钥目录\release.jks')) | Set-Clipboard
-```
-
-四项全部未配置时，工作流仍可验证 Release 构建，输出带 `unsigned` 标记的**未签名 APK，不能直接安装**；只配置部分项目、密码错误或签名失败会让任务失败，不会静默生成替代安装包。签名密钥和密码不写入仓库或下载产物，临时 keystore 在打包结束时清理。
-
-覆盖升级已安装应用需要使用相同签名证书，并设置合适的新 `versionCode`。请持续使用同一发行密钥并自行妥善备份；工作流不会每次生成随机证书。
-
-测试代码位于 `app/src/test/` 与 `app/src/androidTest/`。仓库不含测试图片、音频和视频，依赖这些资源的媒体仪器用例需另外准备；这不影响按上述步骤构建普通 Debug 应用。
-
-### 数据与隐私
-
-- 小黑盒账号会话使用 AndroidKeyStore 与 AES-GCM 加密保存在设备上；账号 Cookie 仅发送至 HTTPS `api.xiaoheihe.cn`。
-- 账号请求禁用重定向与磁盘缓存；Steam、图片／视频及公开网关请求不携带账号 Cookie。
-- 本机阅读历史、搜索记录、设置、屏蔽规则和导入字体保存在设备本地。本机历史与账号历史分别标注，收藏使用账号云端数据。
-- 图片保存、字体导入及规则导入／导出通过系统能力完成，不申请广泛存储权限。图片分享打开系统分享面板，由用户选择后续操作。
-- Steam 翻译仅在用户点击后触发，模型按需通过 Wi-Fi 下载。正文与译文在设备上处理；ML Kit 仍可能联网获取模型、发送性能和使用指标。
-- 喜欢、收藏、评论、关注等账号写操作由用户明确操作触发；遇到验证码或账号限制时显示提示，不自动解题或绕过验证。
-
-### 已知限制
-
-- **评论发布存在尚未修复的问题**：已收到多篇文章发表评论失败的反馈，目前尚未完成修复。
-- 第三方接口可能变化，登录、内容读取及互动可能受到网络、人机验证、实名或风控限制。
-- 话题内搜索是对线上话题列表的标题与摘要逐批查找，需要用户继续下一批；Steam 搜索先定位游戏，再读取该游戏公告，均非全量正文搜索。
-- 视频播放取决于服务端有效地址和设备解码能力；第三方嵌入播放器提供原站入口，部分内容需登录后读取。
-- 自定义字体只能展示字体文件包含的字形，缺字由平台回退；系统文件选择器、键盘、分享面板及官方验证码页面不受应用字体设置控制。
-- 离线演示需主动开启并明确标注。应用不提供本地收藏，也不将本机历史或缓存列表当作在线搜索结果。
-- 不同手机、平板与高刷新率设备的表现可能存在差异，部分机型仍需进一步验证。
-
-### 技术栈
-
-界面使用 Kotlin、Jetpack Compose、Material 3 与 Navigation Compose；数据与网络使用 DataStore、OkHttp 和 Jsoup；图片与视频使用 Coil 2 和 Media3；端侧翻译使用 ML Kit。
-
-## 反馈与建议
-
-欢迎反馈可复现的问题和阅读体验建议。请附应用版本、系统版本、设备型号及操作步骤。涉及账号问题时，请先移除 Cookie、二维码、验证码票据、个人信息和私有响应。
-
-版本变化可查看 [Android 更新日志](CHANGELOG.md) 和 [macOS 发布说明](desktop/RELEASE-NOTES.md)。
-
-## 许可证与致谢
-
-项目原创源码采用 [MIT License](LICENSE)。内容、商标、字体和第三方依赖遵循各自的权利与许可，项目源码许可不替代这些权利。
-
-- **HeyWear 与 heybox-lite**：用于核对公开协议行为与字段。
-- **Google Translate／ML Kit**：提供端侧翻译，SDK、模型和归属素材遵循相应条款，应用内保留服务说明与归属。
-- 小黑盒内容及标识、Steam 内容与商标归各自权利人所有，阅读时可通过原文入口访问内容来源。
+项目源码采用 [MIT License](LICENSE)。依赖和上游归属见 [第三方声明](desktop/docs/THIRD-PARTY-NOTICES.txt)。
