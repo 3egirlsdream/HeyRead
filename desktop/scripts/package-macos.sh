@@ -12,7 +12,9 @@ if [[ -n "$notary_profile" && "$identity" == - ]]; then
   echo 'Apple notarization requires a Developer ID Application signing identity' >&2
   exit 1
 fi
-scratch=$(mktemp -d)
+mkdir -p "$out"
+out="$(cd "$out" && pwd)"
+scratch=$(mktemp -d "$out/.package-$rid.XXXXXX")
 trap 'rm -rf "$scratch"' EXIT
 
 notarize() {
@@ -24,11 +26,9 @@ notarize() {
   xcrun stapler validate "$target"
 }
 
-mkdir -p "$out"
-out="$(cd "$out" && pwd)"
 ./scripts/build-native.sh "$arch" "$scratch/libHeyReadNative.dylib"
 ./scripts/build-icon.sh
-app="$out/$rid/$slug.app"
+app="$scratch/$slug.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 dotnet publish src/HeyRead.Desktop -c Release -r "$rid" --self-contained true -p:Version="$version" -p:PublishSingleFile=false -p:RestoreLockedMode=true -o "$app/Contents/MacOS"
 lipo "$scratch/libHeyReadNative.dylib" -verify_arch "$arch"
@@ -48,13 +48,14 @@ if [[ -n "$notary_profile" ]]; then
   ditto -c -k --keepParent "$app" "$scratch/notary.zip"
   notarize "$scratch/notary.zip" "$app"
 fi
-ditto -c -k --sequesterRsrc --keepParent "$app" "$out/$slug-$version-$rid.zip"
+zip="$scratch/$slug-$version-$rid.zip"
+ditto -c -k --sequesterRsrc --keepParent "$app" "$zip"
 if [ "${HEYREAD_SKIP_DMG:-0}" != 1 ]; then
   stage="$scratch/dmg"
   mkdir "$stage"
   ditto "$app" "$stage/$slug.app"
   ln -s /Applications "$stage/Applications"
-  dmg="$out/$slug-$version-$rid.dmg"
+  dmg="$scratch/$slug-$version-$rid.dmg"
   hdiutil create -volname '小黑盒Community For Mac' -srcfolder "$stage" -ov -format UDZO "$dmg"
   if [[ "$identity" != - ]]; then
     sign=(--force --sign "$identity" --timestamp)
@@ -66,4 +67,14 @@ if [ "${HEYREAD_SKIP_DMG:-0}" != 1 ]; then
 fi
 lipo "$app/Contents/MacOS/$slug" -verify_arch "$arch"
 codesign --verify --deep --strict "$app"
-printf '%s\n' "$app"
+
+destination="$out/$rid/$slug.app"
+mkdir -p "$out/$rid"
+if [[ -d "$destination" ]]; then mv "$destination" "$scratch/previous.app"; fi
+if ! mv "$app" "$destination"; then
+  if [[ -d "$scratch/previous.app" ]]; then mv "$scratch/previous.app" "$destination"; fi
+  exit 1
+fi
+mv "$zip" "$out/"
+if [[ -n "${dmg:-}" ]]; then mv "$dmg" "$out/"; fi
+printf '%s\n' "$destination"
